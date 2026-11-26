@@ -61,11 +61,13 @@ Compare *why* the failed runs failed: across models, across agents, and across p
 ### Optional
 
 13. **Controlled-evidence check:** if budget remains, for up to 10 failed runs, put the gold document into the context and rerun once. This separates finding the evidence from using it.
+14. **Second-opinion judge:** re-judge a random sample of about 50 final answers (fixed seed) with the Gemini Pro-tier model, and report how often it agrees with Qwen3-32B.
 
 ## Design notes
 
 - One file, `src/analyze.py`, using pandas and matplotlib. Labeling calls go through `src/models.py`.
-- The labeling model is not one of the six study models. Proposed: a Gemini Pro-tier model on Google AI Pro developer credits, about $0 of the budget. Alternative: GPT-6.1 Sol, about $8.
+- **Labeling model:** a Gemini Pro-tier model, billed to Google AI Pro developer credits (about $9 estimated; whatever credit is left after the Gemini runs). It is not one of the six study models. If the credits run short, the rest of the labeling uses GPT-6.1 Sol from the main budget.
+- **Answer judge** stays the official Qwen3-32B (spec 01), for comparability with the leaderboard and long-term reproducibility.
 
 ## Done when
 
@@ -78,6 +80,5 @@ Compare *why* the failed runs failed: across models, across agents, and across p
 
 ## Open questions
 
-1. Which labeling model: Gemini Pro-tier on credits, or GPT-6.1 Sol?
-2. Is a second human reviewer available for about 20% of runs, to check label reliability?
-3. Run the optional evidence check (item 13)?
+1. Is a second human reviewer available for about 20% of runs, to check label reliability?
+2. Run the optional evidence check (item 13)?
