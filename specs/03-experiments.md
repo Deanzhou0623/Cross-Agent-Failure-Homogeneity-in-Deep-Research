@@ -34,7 +34,7 @@ Run Phase 1 (90 runs) and Phase 2 (45 runs) within the budget, and save results 
 
 - One file, `src/runner.py`, of a few hundred lines. Runs go one at a time, with optional light concurrency per provider (`--workers 3`). No queue or database.
 - Every trace records the git commit and config hashes, so any result can be traced back to the exact code and settings.
-- If the Gemini runs are billed to Google AI Pro developer credits, the runner tracks them separately from the $30 cap.
+- **Gemini runs are billed to Google AI Pro developer credits** (about $15 available; estimated Gemini spend $6–8 with caching), through a project on the paid API tier. The free tier is not used: its daily limits are too low, and free-tier data may be used by Google. The runner tracks Gemini spend against its own $15 cap, separately from the $30 cap, which covers Anthropic, OpenAI, and judging.
 
 ## Done when
 
@@ -48,4 +48,3 @@ Run Phase 1 (90 runs) and Phase 2 (45 runs) within the budget, and save results 
 ## Open questions
 
 1. Run Phase 2 before 2027-01-01? Gemini 3.8 Flash doubles in price on that date, which adds about $2 to Phase 2.
-2. Should the Gemini runs use Google AI Pro developer credits (outside the cap) or the main budget?
