@@ -7,183 +7,228 @@
 | Blocks | All other specs |
 | Last updated | 2026-11-25 |
 
-## 1. Purpose and scope
+## 1. Goal and scope
 
-This spec fixes the research question, the experimental matrix, what is held constant, what is measured, and how failure homogeneity is analyzed. Everything downstream implements it.
+Fix the research question, the experimental matrix, what is held constant, what is measured, and how failure homogeneity is analyzed. Every other spec implements this one.
 
-**Research question.** Do different search agents and LLM backbones exhibit shared failure mechanisms after accounting for task difficulty and evidence exposure?
+**Research question.** Do different search agents and LLM backbones exhibit shared failure mechanisms when solving difficult information-seeking tasks, after accounting for task difficulty and evidence exposure?
+
+The object of study is the *process* that leads to failure, not final-answer accuracy.
+
+**In scope:** 10 BrowseComp-Plus tasks, 3 agent architectures, 6 backbones across 2 phases (135 trajectories), full trajectory logging, LLM-assisted failure labeling with human verification, descriptive similarity analysis, and a report for supervisor review.
 
 ### Non-goals
 
-- Ranking agents or models by accuracy. Accuracy is reported, but it is not the result.
+- Ranking agents or models by accuracy. Accuracy is reported but is not the result.
 - Confirmatory hypothesis testing. This is an exploratory pilot; all statistics are descriptive.
-- Separating the effect of model capability from reasoning level across phases (see §9).
+- Separating model capability from reasoning level across phases (§8).
 
-## 2. Definitions
-
-| Term | Definition |
-| --- | --- |
-| Task | One BrowseComp-Plus query with its ground-truth answer and evidence annotations |
-| Agent | One of three search-agent architectures: ReAct, Plan-and-Execute, Evidence-Driven |
-| Backbone | One LLM, identified by exact API model ID and reasoning settings |
-| Cell | One (task, agent, backbone) combination |
-| Trajectory | One complete run of a cell, from task prompt to final answer or budget exhaustion |
-| Failure | A trajectory whose final answer the judge scores as incorrect, or which gives no answer |
-| Infrastructure failure | A trajectory ended by an API error, timeout, or crash. Not a study failure; rerun it |
-| Evidence document | A corpus document the benchmark annotates as supporting the answer |
-| Gold document | A corpus document the benchmark annotates as containing the answer |
-
-The exact evidence and gold annotations available are confirmed in spec 01.
-
-## 3. Experimental matrix
-
-| Phase | Tasks | Agents | Backbones | Reasoning level | Trajectories |
-| --- | ---: | ---: | ---: | --- | ---: |
-| 1 · Failure discovery | 10 | 3 | 3 low-cost | High, where supported | 90 |
-| 2 · Validation | 5 of the 10 | 3 | 3 mid-tier | Medium, where supported | 45 |
-| **Total** | | | | | **135** |
-
-Candidate backbones, with exact IDs confirmed in spec 02:
-
-| Provider | Phase 1 | Phase 2 |
-| --- | --- | --- |
-| Anthropic | Claude Haiku 5.5 (`claude-haiku-5-5`)³ | Claude Sonnet 5.5 (`claude-sonnet-5-5`) |
-| OpenAI | GPT-6 Luna (`gpt-6-luna`)² | GPT-6.1 Terra (`gpt-6.1-terra`) |
-
-² High reasoning support for Luna is not yet confirmed; check in spec 02. No GPT-6 Terra exists, so Phase 2 uses GPT-6.1 Terra.
-
-³ Haiku 5.5 input pricing rises 5× for prompts over 100K tokens; spec 02's cost estimate must account for this.
-
-⁴ Defaults to `minimal` thinking, which Google warns can end multi-step tool use early. The `high` thinking level MUST be set explicitly, or the model will produce artificial stopping failures.
-
-⁵ Introductory price ($0.75 / $3.75 per 1M tokens) ends 2026-12-31; from 2027-01-01 it doubles to $1.50 / $7.50.
-| Google | Gemini 3.5 Flash-Lite (`gemini-3.5-flash-lite`)⁴ | Gemini 3.8 Flash (`gemini-3.8-flash`)⁵ |
-
-## 4. Requirements
+## 2. Functional requirements
 
 ### Task selection
 
-- **R1.** The 10 study tasks MUST be chosen by the rule in decision D1, applied once with a recorded seed, before any study trajectory runs.
-- **R2.** The 5 Phase 2 tasks MUST be chosen by the rule in decision D2 at the same time as R1, before any Phase 1 trajectory runs. Phase 1 outcomes MUST NOT influence this choice.
-- **R3.** The task IDs for both phases MUST be stored in `configs/` and covered by the freeze (R9).
+- **R1.** The 10 study tasks MUST be chosen by the rule in D1, applied once with a recorded seed, before any study trajectory runs. Our own models' outcomes MUST NOT influence selection.
+- **R2.** The 5 Phase 2 tasks MUST be chosen by the rule in D2 at the same time as R1, before any Phase 1 trajectory runs.
+- **R3.** Selected task IDs, their difficulty stratum, and the selection rationale MUST be stored in `configs/tasks.yaml` and covered by the freeze (R10).
 
 ### Controls
 
 - **R4.** These MUST be identical for every trajectory in both phases:
-  - corpus, retriever, index version, top-k, and document truncation length (D3)
-  - tool set and tool schemas (search and document fetch, defined in spec 03)
-  - shared system prompt text and answer format; only architecture-specific instructions may differ
+  - corpus, retriever, index version, top-k, snippet length, and document truncation length (D3)
+  - tool set and tool schemas (`search`, `get_document`; spec 03)
+  - shared task prompt and answer format; only architecture-specific instructions may differ
   - per-trajectory budget (D4)
-  - answer judge and judging prompt (D5)
-- **R5.** Prompt development and debugging MUST use BrowseComp-Plus tasks outside the 10 study tasks.
-- **R6.** Reasoning level is set to the provider's closest named setting to High (Phase 1) or Medium (Phase 2). The exact parameter values sent MUST be recorded. Sampling parameters a provider does not support for reasoning models are left at provider defaults and recorded as such.
-- **R7.** Agents MUST NOT receive ground-truth answers, evidence annotations, or gold labels (see AGENTS.md §3).
+  - answer judge, judge prompt, and judge settings (D5)
+- **R5.** Retrieval MUST run over the full BrowseComp-Plus corpus. It MUST NOT be restricted to the gold or evidence documents of the selected tasks.
+- **R6.** Prompt development and debugging MUST use BrowseComp-Plus tasks outside the 10 study tasks.
+- **R7.** Reasoning level is set to the provider's closest named setting to High (Phase 1) or Medium (Phase 2). The exact parameter values sent MUST be recorded. Unsupported sampling parameters are left at provider defaults and recorded as such.
+- **R8.** Agents MUST NOT receive ground-truth answers, evidence annotations, or gold labels (AGENTS.md §3).
 
 ### Run policy
 
-- **R8.** Each cell runs once in the main matrix. Replications follow decision D8 and are reported separately.
-- **R9.** Before the first Phase 1 study trajectory, the following are frozen in a tagged commit (`freeze-phase1`): this spec with all decisions resolved, task lists, configs, prompts, tools, budgets, and the failure taxonomy (§6). Later changes go in the deviations log (§10).
-- **R10.** Infrastructure failures are rerun under identical settings, up to 3 attempts per cell. Cells that still fail are reported as missing, not as study failures.
+- **R9.** Each cell runs once in the main matrix. Replications follow D8 and are reported separately.
+- **R10.** Before the first Phase 1 study trajectory, the following are frozen in a tagged commit (`freeze-phase1`): this spec with all decisions resolved, task lists, configs, prompts, tools, budgets, and the failure taxonomy (§3.5). Later changes go in the deviations log (Appendix B).
+- **R11.** Infrastructure failures are rerun under identical settings, up to 3 attempts per cell. Cells that still fail are reported as missing, not as study failures.
+- **R12.** No paid study run starts before a smoke test and a pilot (D9) have produced a cost estimate that fits the budget.
 
-## 5. Measurements
+## 3. Technical design
+
+### 3.1 Definitions
+
+| Term | Definition |
+| --- | --- |
+| Task | One BrowseComp-Plus query with its ground-truth answer and evidence annotations |
+| Agent | One of three architectures: ReAct, Plan-and-Execute, Evidence-Driven |
+| Backbone | One LLM, identified by exact API model ID and reasoning settings |
+| Cell | One (task, agent, backbone) combination |
+| Trajectory | One complete run of a cell, from task prompt to final answer or budget exhaustion |
+| Failure | A trajectory whose final answer the judge scores incorrect, or which gives no answer |
+| Infrastructure failure | A trajectory ended by an API error, timeout, or crash. Not a study failure; rerun it |
+| Evidence document | A corpus document labeled "needed to answer the query" (`qrel_evidence.txt`) |
+| Gold document | An evidence document that also contains the final answer (`qrel_golds.txt`) |
+
+### 3.2 Experimental matrix
+
+| Phase | Tasks | Agents | Backbones | Reasoning level | Trajectories |
+| --- | ---: | ---: | ---: | --- | ---: |
+| 1 · Failure discovery | 10 (7 hard, 3 moderately hard) | 3 | 3 low-cost | High | 90 |
+| 2 · Validation | 5 of the 10, preselected | 3 | 3 mid-tier | Medium | 45 |
+| **Total** | | | | | **135** |
+
+### 3.3 Backbones
+
+Exact IDs, reasoning controls, pricing, and token accounting are verified by a smoke test in spec 02 before use.
+
+| Provider | Phase 1 · High | Phase 2 · Medium |
+| --- | --- | --- |
+| Anthropic | Claude Haiku 5.5 (`claude-haiku-5-5`)¹ | Claude Sonnet 5.5 (`claude-sonnet-5-5`) |
+| OpenAI | GPT-6 Luna (`gpt-6-luna`)² | GPT-6.1 Terra (`gpt-6.1-terra`)² |
+| Google | Gemini 3.5 Flash-Lite (`gemini-3.5-flash-lite`)³ | Gemini 3.8 Flash (`gemini-3.8-flash`)⁴ |
+
+¹ Input price rises 5× for prompts over 100K tokens; the cost estimate must account for this.
+² OpenAI's model pages list `reasoning.effort` values `none` to `max` for both. No GPT-6 Terra exists, so Phase 2 uses GPT-6.1 Terra.
+³ Defaults to `minimal` thinking, which Google warns can end multi-step tool use early. `high` MUST be set explicitly, or the study records artificial stopping failures.
+⁴ Introductory price ($0.75 / $3.75 per 1M tokens) ends 2026-12-31 and doubles from 2027-01-01.
+
+Backbones are matched by lineup position (each provider's smallest model in Phase 1, its middle model in Phase 2), not by price or measured capability.
+
+### 3.4 Measurements
 
 Per trajectory, as specified in spec 04:
 
 | Measure | Content |
 | --- | --- |
 | Outcome | Final answer, judge verdict, judge rationale |
-| Search behavior | Queries issued, results returned per query, documents fetched, number of tool calls, reformulations |
-| Evidence exposure | For each evidence and gold document: whether it was **retrieved** (appeared in any result list), **read** (fetched in full), and **cited** (referenced in the final answer) |
-| Planning | Plan and replan events (Plan-and-Execute), evidence-gap statements (Evidence-Driven) |
-| Cost | Input, output, and reasoning tokens where available; latency; API cost |
-| Annotation | Failure labels with trajectory step references (§6) |
+| Search behavior | Queries issued, ranked results per query, documents opened, tool-call counts, reformulations |
+| Evidence exposure | For each evidence and gold document: **retrieved** (appeared in a result list), **read** (opened with `get_document`), **cited** (docid cited in the final explanation) |
+| Planning | Plan and replan events (Plan-and-Execute), evidence ledger and gap updates (Evidence-Driven) |
+| Cost | Input, cached-input, output, and reasoning tokens where the provider reports them; latency; estimated cost |
+| Annotation | Failure labels citing trajectory event IDs (§3.5) |
+
+Reasoning content is logged only as the provider exposes it (for example, summaries). Raw private chain of thought is never claimed.
 
 Derived per trajectory: evidence recall at the retrieved, read, and cited levels, and an **exposure stratum**:
 
 | Stratum | Condition |
 | --- | --- |
-| E0 · Not retrieved | No gold or evidence document was ever retrieved |
-| E1 · Retrieved, not read | At least one was retrieved, none was read |
-| E2 · Read | At least one gold or evidence document was read |
+| E0 · Not retrieved | No evidence or gold document ever appeared in results |
+| E1 · Retrieved, not read | At least one appeared in results; none was opened |
+| E2 · Read | At least one evidence or gold document was opened |
 
-Exact recall definitions and stratum thresholds are finalized in spec 06.
+Exact definitions are finalized in spec 06.
 
-## 6. Failure taxonomy
+### 3.5 Failure taxonomy
 
-Each failed trajectory gets one **primary** label (the earliest decisive failure) and any number of **secondary** labels. Every label MUST cite the trajectory step or steps that support it.
+Each failed trajectory gets one **primary** label (the earliest decisive failure) and any number of **secondary** labels. Every label MUST cite the trajectory event IDs that support it.
 
 | Label | Operational definition |
 | --- | --- |
-| Query formulation | Queries miss or distort key constraints of the question, so relevant documents could not reasonably be retrieved |
+| Query formulation | Queries miss or distort key constraints of the question, so needed documents could not reasonably be retrieved |
 | Retrieval | Reasonable queries were issued, but the retriever did not return the needed documents |
-| Evidence selection | Needed documents were retrieved but not read, or were read and then ignored in favor of weaker sources |
-| Reasoning or synthesis | Needed evidence was read, but the agent drew a wrong inference or combined facts incorrectly |
+| Evidence selection | Needed documents appeared in results but were not opened, or weaker sources were preferred over them |
+| Evidence utilization | A needed document was opened, but the agent missed, misread, or failed to extract the relevant fact |
+| Reasoning or synthesis | The relevant facts were extracted, but were combined or inferred incorrectly |
 | Verification | A candidate answer was not checked against the question's constraints, or was checked incorrectly |
-| Premature commitment | The agent fixed on a candidate early and afterward searched only to confirm it, or dismissed contradicting evidence |
+| Premature commitment | The agent fixed on a candidate early, then searched only to confirm it or dismissed contradicting evidence |
 | Stopping | The decision to stop was wrong: stopped while evidence was clearly missing, or used up the budget in unproductive loops |
 | Other / unclear | None of the above fits; requires a free-text note |
 
-The annotation guide in spec 06 adds worked examples and tie-break rules, for example between premature commitment and verification.
+Spec 06 adds worked examples and tie-break rules, for example evidence utilization versus reasoning.
 
-## 7. Analysis plan
+### 3.6 Analysis plan
 
-All analyses are exploratory and descriptive. Where intervals are reported, they are bootstrap intervals over tasks.
+All analyses are descriptive. Intervals, where reported, are bootstrap intervals over tasks.
 
-- **A1 · Outcomes.** Correctness for each cell; accuracy by agent, by backbone, and by phase.
-- **A2 · Label distributions.** Primary and secondary label frequencies by agent, by backbone, and by phase.
-- **A3 · Within-task homogeneity.** Comparing trajectories on the same task holds task difficulty constant. For each task, compute pairwise similarity of failure labels (D6) for:
-  - same agent, different backbone
-  - same backbone, different agent
-  - different agent and backbone
+- **A1 · Outcomes.** Correctness per cell; accuracy by agent, backbone, phase, and difficulty stratum.
+- **A2 · Label distributions.** Primary and secondary label frequencies by agent, backbone, and phase.
+- **A3 · Within-task homogeneity.** Comparing trajectories on the same task holds task difficulty constant. For each task, compute pairwise label similarity (D6) for:
+  1. same agent, different backbone
+  2. same backbone, different agent
+  3. different agent and backbone
 
-  Compare each against a permutation baseline that shuffles labels across tasks while keeping each label's overall frequency. Similarity above the baseline indicates shared mechanisms beyond what common labels alone would produce.
-- **A4 · Exposure-conditioned homogeneity.** Repeat A3 within each exposure stratum (E0–E2), to check whether shared failures only reflect shared lack of evidence.
-- **A5 · Cross-phase persistence.** On the 5 shared tasks, for each (task, agent), compare Phase 1 and Phase 2 primary labels. Report how often a mechanism persists, disappears (the stronger model succeeds), or changes.
-- **A6 · Exposure and correctness.** Accuracy by exposure stratum, by agent and backbone.
-- **A7 · Case studies.** 3–5 trajectories chosen to illustrate the most shared and the most divergent mechanisms, chosen after A3–A5.
+  Compare each against a permutation baseline that shuffles label sets across tasks while keeping label frequencies. Similarity above baseline indicates mechanisms shared beyond what common labels alone produce.
+- **A4 · Exposure-conditioned homogeneity.** Repeat A3 within each exposure stratum, to check whether shared failures only reflect a shared lack of evidence.
+- **A5 · Cross-phase persistence.** On the 5 shared tasks, compare Phase 1 and Phase 2 primary labels per (task, agent): persists, disappears (Phase 2 succeeds), or changes.
+- **A6 · Exposure and correctness.** Accuracy by exposure stratum, agent, and backbone.
+- **A7 · Case studies.** 3–5 trajectories that illustrate the most shared and the most divergent mechanisms, chosen after A3–A5.
+- **A8 · Controlled-evidence interventions (optional, D10).** On a few failed cases, supply the gold document and rerun, to separate retrieval-side from reasoning-side failure.
 
-## 8. Acceptance criteria
+## 4. Implementation tasks
 
-This spec is `Approved` when:
+| ID | Task | Implemented in |
+| --- | --- | --- |
+| T1 | Selection script applying D1/D2 with seed, writing `configs/tasks.yaml` | spec 01 |
+| T2 | Experiment config pinning backbones, reasoning settings, budgets | specs 02, 05 |
+| T3 | Smoke test, pilot, and cost estimate (R12) | specs 02, 05 |
+| T4 | Freeze tag `freeze-phase1` after all decisions resolve | this spec |
+| T5 | Analyses A1–A8 | spec 06 |
 
-- [ ] Every decision in §11 has its Resolution column filled in.
-- [ ] Spec 06 confirms each taxonomy label has an annotation example.
-- [ ] Spec 01 confirms the evidence and gold annotations needed for §5 exist in BrowseComp-Plus.
+## 5. Interfaces and data contracts
 
-It is `Verified` when:
+- `configs/tasks.yaml`: `seed`, `difficulty_source`, `phase1_task_ids[10]`, `phase2_task_ids[5]`, and per task: `stratum` (`hard` | `moderate`), per-baseline correctness, `rationale`. Excluded candidates are listed with their reasons. Schema in spec 01.
+- `configs/experiment.yaml`: phases, backbones with reasoning settings, agents, budgets. Schema in spec 05.
+- Trajectory logs and annotations: spec 04 and spec 06.
 
-- [ ] Task lists for both phases are in `configs/` with the seed and selection script that produced them.
-- [ ] The `freeze-phase1` tag exists and contains every item listed in R9.
+## 6. Testing requirements
 
-## 9. Known limitations
+This spec has no code of its own. Each requirement is tested where it is implemented: R1–R3 in spec 01, R4–R5 and R8 in specs 01 and 03, R7 in spec 02, R9–R12 in spec 05.
+
+## 7. Acceptance criteria
+
+`Approved` when:
+
+- [ ] Every decision in Appendix A has a resolution.
+- [ ] Spec 06 gives an annotation example for every taxonomy label.
+
+`Verified` when:
+
+- [ ] `configs/tasks.yaml` exists with 7 hard + 3 moderately hard tasks, 5 Phase 2 tasks, the seed, and the script that produced it.
+- [ ] Spec 01 confirms evidence and gold annotations exist for all 10 tasks.
+- [ ] The `freeze-phase1` tag exists and contains every item in R10.
+
+## 8. Dependencies and risks
+
+**Dependencies:** none. All other specs depend on this one.
+
+### Known limitations
 
 - Ten tasks and one run per cell support descriptive findings only.
 - High reasoning effort may reduce reasoning-budget limitations but cannot remove weak-model capability differences.
 - Provider reasoning levels are not directly equivalent.
-- Backbones are matched by each provider's lineup position, not by price or measured capability; prices within a phase differ by up to about 3×.
+- Backbones are matched by lineup position; prices within a phase differ by up to about 3×.
 - Phase 1 and Phase 2 differ in both models and reasoning levels, so cross-phase differences cannot be attributed to model capability alone.
-- LLM-assisted annotation may share biases with the backbones being annotated; manual verification (D7) is the mitigation.
+- Difficulty is measured on two frontier models (GPT-5, o3) and two retrievers. It is a proxy for difficulty for our backbones and retriever, not a direct measure.
+- LLM-assisted annotation may share biases with the backbones; 100% human verification (D7) is the mitigation.
 
-## 10. Deviations log
+### Risks
+
+| Risk | Mitigation |
+| --- | --- |
+| Model IDs, prices, or reasoning parameters change mid-study | Verify in spec 02 smoke test; record every parameter sent; log deviations |
+| Hosted retriever or judge changes behavior | Cache every search response; pin judge provider; validate both against published numbers (spec 01) |
+| Cheap backbones fail every task, leaving little variety | 3 moderately hard tasks; exposure strata separate retrieval from reasoning failures |
+| Budget overrun | Hard caps, dry-run estimates, pilot before Phase 1 (D9) |
+
+## Appendix A. Decisions
+
+| ID | Decision | Resolution |
+| --- | --- | --- |
+| D1 | How the 10 tasks are chosen | **Revised 2026-11-25 per project brief; needs review.** 7 hard + 3 moderately hard. BrowseComp-Plus has no official difficulty levels, and the leaderboard publishes only aggregate accuracy. Difficulty therefore comes from the only public per-query baseline results: the four published runs (GPT-5 and o3, each with BM25 and Qwen3-Embedding-8B), scored by the D5 judge. **Hard:** solved by exactly 1 of the 4 runs. **Moderately hard:** solved by exactly 2 of 4. Tasks solved by 0 runs (possibly unsolvable or mis-keyed) and by 3–4 runs are excluded. Each task MUST have at least one evidence and one gold document. Each stratum is shuffled with seed `20261125` and walked in order. A candidate is skipped if its answer is ambiguous on manual review, with the reason recorded, and topics are spread where a topic field exists. Selection stops at 7 hard and 3 moderately hard. |
+| D2 | How the 5 Phase 2 tasks are chosen | **Revised 2026-11-25; needs review.** Stratified draw with seed `20261125`: 3 hard + 2 moderately hard from the 10, drawn together with D1 before any Phase 1 run. Never redrawn. |
+| D3 | Retriever, top-k, snippet and document length | **Open.** Proposed: top-k = 5 and snippets ≤ 512 tokens (the official BrowseComp-Plus setup); `get_document` text truncated to 4,096 tokens (project cost control). Retriever backend, chosen after spec 01's validation tests: **(a)** Qwen3-Embedding-8B through the hosted NetMind MCP server, if its terms and rate limits allow, with every response cached; **(b)** local BM25 (Pyserini, Java 21); **(c)** local Qwen3-Embedding-8B on Apple silicon. Recommendation: (a), with (b) as fallback. |
+| D4 | Per-trajectory budget | **Revised 2026-11-25 (adds document-read limit); needs review.** Max 30 tool calls, of which at most 10 are `get_document`; max 40 model calls; max 32,000 output tokens per model call; max wall time 15 minutes; per-trajectory cost cap in config. On exhaustion the agent is asked once for a final answer. |
+| D5 | Answer judge | **Resolved 2026-11-25.** The official judge `Qwen/Qwen3-32B`, with the official prompt and settings (temperature 0.7, top_p 0.8), through one pinned hosted provider (DeepInfra or OpenRouter) with fallback routing disabled. The provider is recorded with every judgment. The same judge scores the published runs (D1) and both phases. It is not one of the six backbones. |
+| D6 | Failure similarity measure | **Resolved 2026-11-25.** Jaccard similarity on label sets, plus primary-label agreement rate. |
+| D7 | Annotation process | **Resolved 2026-11-25.** An LLM pre-labels each failed trajectory with event citations (model: D11); the project author verifies every label. A second annotator re-labels 20% if available. LLM–human agreement (Cohen's κ) is reported per label. |
+| D8 | Replications | **Resolved 2026-11-25.** 1 run per cell. A separate Phase 1 replication set: 3 tasks × 3 agents × 1 backbone × 2 extra runs = 18 trajectories, to estimate run-to-run variation. |
+| D9 | Budget | **Resolved 2026-11-25, provisional.** Hard cap of $30 for all paid API use: Phase 1 $6, Phase 2 $13, judging and annotation $5, smoke test / pilot / debugging $4, reserve $2. Prompt caching MUST be enabled wherever supported. Gemini runs MAY be billed to Google AI Pro developer credits, outside the cap. A pilot of about 3 trajectories per backbone on non-study tasks re-checks the estimate before Phase 1. |
+| D10 | Controlled-evidence interventions | **Open.** Proposed: optional; at most 10 runs from the reserve, designed in spec 06, run only after the main analysis. |
+| D11 | Failure-labeling model | **Open.** Proposed: a Gemini Pro-tier model paid from Google AI Pro developer credits. It is not one of the backbones and costs $0 of the cap, but it shares a provider with two backbones. It labels condensed traces (spec 04). Alternative: GPT-6.1 Sol, about $8. |
+
+## Appendix B. Deviations log
 
 Record any change made after the `freeze-phase1` tag.
 
 | Date | Change | Reason | Trajectories affected |
 | --- | --- | --- | --- |
 | | | | |
-
-## 11. Open decisions
-
-Each row has a proposed default. Accept it, replace it, or mark it for discussion.
-
-| ID | Decision | Proposed default | Resolution |
-| --- | --- | --- | --- |
-| D1 | How the 10 difficult tasks are chosen | Use per-query accuracy from published BrowseComp-Plus baseline runs, if available (confirm in spec 01). Keep queries that most baselines answer incorrectly, exclude any with ambiguous answers, then sample 10 with a fixed seed, spread across topics where possible. | **Resolved 2026-11-25, pending spec 01 check.** Hard tasks only; BrowseComp-Plus has no official difficulty levels, so difficulty is derived. Per-query accuracy comes from the `per_query_metrics` of published leaderboard submissions. A task is eligible if at most 1/3 of submissions answer it correctly **and** at least one does, so it is hard but shown to be solvable. Exclude tasks with ambiguous answers. Sample 10 eligible tasks with seed `20261125`, spread across topics where possible. **Fallback** if per-query results are not available: run one fixed, cheap baseline 3 times on each task in a random pool of 50, and treat a task as eligible if it is solved in exactly 1 of the 3 runs; the pool is then used only for selection, and debugging (R5) uses other tasks. |
-| D2 | How the 5 Phase 2 tasks are chosen | Random 5 of the 10, fixed seed, drawn together with D1 | **Resolved 2026-11-25.** Uniform random sample of 5 from the 10 study tasks, seed `20261125`. Drawn once by the selection script right after D1, before any Phase 1 run. The 5 task IDs are committed to `configs/` and frozen (R9); they are never redrawn. |
-| D3 | Retriever, top-k, document truncation | The benchmark's dense retriever with its prebuilt index if one is available, otherwise BM25. Top-k = 5. Fetched documents truncated to a fixed token length set in spec 01. | |
-| D4 | Per-trajectory budget | Max 30 tool calls in total; max wall time 15 minutes; per-trajectory cost cap set in config. On budget exhaustion, the agent is asked once for a final answer. | **Resolved 2026-11-25.** Accepted as proposed. |
-| D5 | Answer judge | The judge model and prompt from the official BrowseComp-Plus evaluation, fixed for both phases, with the model ID recorded. | **Resolved 2026-11-25.** The official BrowseComp-Plus judge, `Qwen/Qwen3-32B`, with its official prompt and settings (temperature 0.7, top_p 0.8), called through one hosted provider (DeepInfra or OpenRouter) because no local GPU is available. The provider is pinned with fallback routing disabled, and recorded with every judgment. The same judge scores the published runs used for D1 and both study phases, never changed between them. It is not one of the six backbones. |
-| D6 | Failure similarity measure | Jaccard similarity on full label sets, plus primary-label agreement rate | **Resolved 2026-11-25.** Accepted as proposed. |
-| D7 | Annotation process | An LLM pre-labels each failed trajectory with step citations; the project author verifies every label. A second annotator re-labels 20% if available. Report LLM–human agreement (Cohen's κ) per label. | **Resolved 2026-11-25.** Accepted as proposed. |
-| D8 | Replications | 1 run per cell in the main matrix. Separate replication set in Phase 1: 3 tasks × 3 agents × 1 backbone × 2 extra runs = 18 trajectories, to estimate run-to-run variation. | **Resolved 2026-11-25.** Accepted as proposed. |
-| D9 | Total paid-API budget | To be set by the project author, in USD, for each phase | **Resolved 2026-11-25, provisional.** Hard cap of $30 for all paid API use, split as: Phase 1 $6, Phase 2 $12, judging and annotation $6, debugging and pilot $3, reserve $3. Prompt caching MUST be enabled for every provider that supports it; the 2026-11-25 estimate is about $20–30 with caching and $50–65 without. Before Phase 1, a pilot of about 3 trajectories per backbone on non-study tasks measures real token use, and the caps are re-checked against it. If the estimate exceeds a cap, revisit D3/D4 (document length, tool-call limit) or the budget before running. |
