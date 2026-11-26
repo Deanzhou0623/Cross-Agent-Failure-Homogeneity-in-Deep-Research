@@ -1,0 +1,44 @@
+# BrowseComp-Plus setup (spec 01)
+dataset_repo: Tevatron/browsecomp-plus
+runs_repo: Tevatron/browsecomp-plus-runs
+qrels_base_url: https://raw.githubusercontent.com/texttron/BrowseComp-Plus/main/topics-qrels
+published_runs:            # path in runs_repo -> leaderboard accuracy (Qwen3-32B judge)
+  bm25/gpt5.jsonl: 57.59
+  bm25/o3.jsonl: 50.48
+  qwen3-embed-8b/gpt5.jsonl: 71.69
+  qwen3-embed-8b/o3.jsonl: 65.90
+
+retrieval:
+  backend: netmind         # netmind | bm25
+  netmind_url: "https://mcp.netmind.ai/sse/{token}/browsecomp-plus/sse"
+  k: 5
+  snippet_max_tokens: 512
+  document_max_tokens: 4096
+  snippet_tokenizer: Qwen/Qwen3-0.6B
+  published_evidence_recall_at_5: {netmind: 0.1453, bm25: 0.0118}
+
+judge:
+  model: Qwen/Qwen3-32B
+  temperature: 0.7
+  top_p: 0.8
+  top_k: 20
+  max_tokens: 4096
+  enable_thinking: false
+  providers:
+    deepinfra:
+      base_url: https://api.deepinfra.com/v1/openai
+      model: Qwen/Qwen3-32B
+      price: {input: 0.10, output: 0.30}
+    openrouter:
+      base_url: https://openrouter.ai/api/v1
+      model: qwen/qwen3-32b
+      pin_provider: DeepInfra
+      price: {input: 0.10, output: 0.30}
+  cost_cap_usd: 1.50
+
+selection:
+  seed: 20261125
+  n_hard: 7
+  n_moderate: 3
+  phase2_hard: 3
+  phase2_moderate: 2

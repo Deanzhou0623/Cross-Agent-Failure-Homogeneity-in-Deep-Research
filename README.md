@@ -74,6 +74,22 @@ Reasoning text is logged only as each provider exposes it (for example, summarie
 
 A hard cap of **$30** for all API calls, with prompt caching on. The estimate is about $25–35 with caching. It drops to about $20–30 if the Gemini runs use Google AI Pro developer credits. A smoke test on a few non-study tasks measures real costs before the 135 runs, and nothing paid runs without explicit approval.
 
+## Quick start
+
+```bash
+uv sync                                    # install
+cp .env.example .env                       # then fill in the API keys
+uv run pytest                              # offline tests, no keys needed
+
+uv run python -m src.benchmark download    # queries, answers, qrels, published runs -> data/
+uv run python -m src.models check          # one short call per model (~$0.05)
+uv run python -m src.benchmark check-retrieval
+uv run python -m src.benchmark score-runs --dry-run   # then without --dry-run (~$0.60)
+uv run python -m src.benchmark candidates  # then screen configs/task_screening.yaml by hand
+uv run python -m src.benchmark finalize    # writes configs/tasks.yaml
+uv run python -m src.benchmark sample --model haiku   # one query end to end
+```
+
 ## Project structure
 
 ```text

@@ -1,0 +1,46 @@
+# Study backbones. Prices are USD per 1M tokens, collected 2026-11-25 from provider
+# pages and price trackers; values marked "assumed" must be checked in the smoke test.
+# reasoning: the exact provider parameter sent with every call.
+
+phase1:
+  haiku:
+    provider: anthropic
+    model_id: claude-haiku-5-5
+    reasoning: {effort: high}            # output_config.effort; adaptive thinking is always on
+    price: {input: 0.10, cached_input: 0.01, cache_write: 0.125, output: 0.50,
+            long_context_threshold: 100000, long_input: 0.50, long_output: 2.50}
+    notes: cached_input assumed at 0.1x input
+  luna:
+    provider: openai
+    model_id: gpt-6-luna
+    reasoning: {effort: high}            # reasoning.effort
+    price: {input: 0.10, cached_input: 0.01, output: 0.50}
+  flash_lite:
+    provider: gemini
+    model_id: gemini-3.5-flash-lite
+    reasoning: {thinking_level: high}    # default is minimal; must be set explicitly
+    price: {input: 0.30, cached_input: 0.03, output: 2.50}
+    notes: cached_input assumed at 0.1x input
+    billing: google_credits
+
+phase2:
+  sonnet:
+    provider: anthropic
+    model_id: claude-sonnet-5-5
+    reasoning: {effort: medium}
+    price: {input: 2.00, cached_input: 0.10, cache_write: 2.50, output: 10.00}
+  terra:
+    provider: openai
+    model_id: gpt-6.1-terra
+    reasoning: {effort: medium}
+    price: {input: 1.00, cached_input: 0.05, output: 5.00}
+  flash:
+    provider: gemini
+    model_id: gemini-3.8-flash
+    reasoning: {thinking_level: medium}
+    price: {input: 0.75, cached_input: 0.075, output: 3.75}
+    notes: introductory price until 2026-12-31; 1.50 / 7.50 from 2027-01-01
+    billing: google_credits
+
+# Shared call settings
+max_output_tokens: 32000

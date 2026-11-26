@@ -1,0 +1,18 @@
+# Benchmark data: decrypted questions, answers, documents, published runs, caches.
+# BrowseComp-Plus asks that this never appear as plain text online.
+data/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Raw traces are committed only in encrypted form (see AGENTS.md)
+results/**/*.jsonl
+!results/**/*.jsonl.enc
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
