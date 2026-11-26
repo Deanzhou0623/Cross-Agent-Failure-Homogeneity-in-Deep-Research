@@ -4,7 +4,7 @@ An exploratory study of whether search agents and LLM backbones share failure me
 
 > **Research question:** Do different search agents and LLM backbones exhibit shared failure mechanisms after accounting for task difficulty and evidence exposure?
 
-### Objectives
+## Objectives
 
 1. Identify common failure mechanisms across search agents.
 2. Compare failure patterns across LLM backbones.
@@ -30,9 +30,9 @@ Phase 1 uses High thinking to reduce avoidable reasoning-budget limitations. Deb
 
 | Provider | Phase 1 · High¹ | Phase 2 · Medium¹ |
 | --- | --- | --- |
-| Anthropic | Haiku | Sonnet |
-| OpenAI | Low-cost reasoning model | Mid-tier reasoning model |
-| Google | Gemini Flash-Lite | Gemini Flash |
+| Anthropic | Claude Haiku 5.5 (`claude-haiku-5-5`) | Claude Sonnet 5.5 (`claude-sonnet-5-5`) |
+| OpenAI | GPT-6 Luna (`gpt-6-luna`) | GPT-6.1 Terra (`gpt-6.1-terra`) |
+| Google | Gemini 3.5 Flash-Lite (`gemini-3.5-flash-lite`) | Gemini 3.8 Flash (`gemini-3.8-flash`) |
 
 Exact API model IDs and supported reasoning settings must be verified before execution.
 

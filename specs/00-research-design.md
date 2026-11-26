@@ -47,9 +47,17 @@ Candidate backbones, with exact IDs confirmed in spec 02:
 
 | Provider | Phase 1 | Phase 2 |
 | --- | --- | --- |
-| Anthropic | Haiku | Sonnet |
-| OpenAI | Low-cost reasoning model | Mid-tier reasoning model |
-| Google | Gemini Flash-Lite | Gemini Flash |
+| Anthropic | Claude Haiku 5.5 (`claude-haiku-5-5`)³ | Claude Sonnet 5.5 (`claude-sonnet-5-5`) |
+| OpenAI | GPT-6 Luna (`gpt-6-luna`)² | GPT-6.1 Terra (`gpt-6.1-terra`) |
+
+² High reasoning support for Luna is not yet confirmed; check in spec 02. No GPT-6 Terra exists, so Phase 2 uses GPT-6.1 Terra.
+
+³ Haiku 5.5 input pricing rises 5× for prompts over 100K tokens; spec 02's cost estimate must account for this.
+
+⁴ Defaults to `minimal` thinking, which Google warns can end multi-step tool use early. The `high` thinking level MUST be set explicitly, or the model will produce artificial stopping failures.
+
+⁵ Introductory price ($0.75 / $3.75 per 1M tokens) ends 2026-12-31; from 2027-01-01 it doubles to $1.50 / $7.50.
+| Google | Gemini 3.5 Flash-Lite (`gemini-3.5-flash-lite`)⁴ | Gemini 3.8 Flash (`gemini-3.8-flash`)⁵ |
 
 ## 4. Requirements
 
@@ -152,6 +160,7 @@ It is `Verified` when:
 - Ten tasks and one run per cell support descriptive findings only.
 - High reasoning effort may reduce reasoning-budget limitations but cannot remove weak-model capability differences.
 - Provider reasoning levels are not directly equivalent.
+- Backbones are matched by each provider's lineup position, not by price or measured capability; prices within a phase differ by up to about 3×.
 - Phase 1 and Phase 2 differ in both models and reasoning levels, so cross-phase differences cannot be attributed to model capability alone.
 - LLM-assisted annotation may share biases with the backbones being annotated; manual verification (D7) is the mitigation.
 
@@ -169,12 +178,12 @@ Each row has a proposed default. Accept it, replace it, or mark it for discussio
 
 | ID | Decision | Proposed default | Resolution |
 | --- | --- | --- | --- |
-| D1 | How the 10 difficult tasks are chosen | Use per-query accuracy from published BrowseComp-Plus baseline runs, if available (confirm in spec 01). Keep queries that most baselines answer incorrectly, exclude any with ambiguous answers, then sample 10 with a fixed seed, spread across topics where possible. | |
-| D2 | How the 5 Phase 2 tasks are chosen | Random 5 of the 10, fixed seed, drawn together with D1 | |
+| D1 | How the 10 difficult tasks are chosen | Use per-query accuracy from published BrowseComp-Plus baseline runs, if available (confirm in spec 01). Keep queries that most baselines answer incorrectly, exclude any with ambiguous answers, then sample 10 with a fixed seed, spread across topics where possible. | **Resolved 2026-11-25, pending spec 01 check.** Hard tasks only; BrowseComp-Plus has no official difficulty levels, so difficulty is derived. Per-query accuracy comes from the `per_query_metrics` of published leaderboard submissions. A task is eligible if at most 1/3 of submissions answer it correctly **and** at least one does, so it is hard but shown to be solvable. Exclude tasks with ambiguous answers. Sample 10 eligible tasks with seed `20261125`, spread across topics where possible. **Fallback** if per-query results are not available: run one fixed, cheap baseline 3 times on each task in a random pool of 50, and treat a task as eligible if it is solved in exactly 1 of the 3 runs; the pool is then used only for selection, and debugging (R5) uses other tasks. |
+| D2 | How the 5 Phase 2 tasks are chosen | Random 5 of the 10, fixed seed, drawn together with D1 | **Resolved 2026-11-25.** Uniform random sample of 5 from the 10 study tasks, seed `20261125`. Drawn once by the selection script right after D1, before any Phase 1 run. The 5 task IDs are committed to `configs/` and frozen (R9); they are never redrawn. |
 | D3 | Retriever, top-k, document truncation | The benchmark's dense retriever with its prebuilt index if one is available, otherwise BM25. Top-k = 5. Fetched documents truncated to a fixed token length set in spec 01. | |
-| D4 | Per-trajectory budget | Max 30 tool calls in total; max wall time 15 minutes; per-trajectory cost cap set in config. On budget exhaustion, the agent is asked once for a final answer. | |
-| D5 | Answer judge | The judge model and prompt from the official BrowseComp-Plus evaluation, fixed for both phases, with the model ID recorded. | |
-| D6 | Failure similarity measure | Jaccard similarity on full label sets, plus primary-label agreement rate | |
-| D7 | Annotation process | An LLM pre-labels each failed trajectory with step citations; the project author verifies every label. A second annotator re-labels 20% if available. Report LLM–human agreement (Cohen's κ) per label. | |
-| D8 | Replications | 1 run per cell in the main matrix. Separate replication set in Phase 1: 3 tasks × 3 agents × 1 backbone × 2 extra runs = 18 trajectories, to estimate run-to-run variation. | |
-| D9 | Total paid-API budget | To be set by the project author, in USD, for each phase | |
+| D4 | Per-trajectory budget | Max 30 tool calls in total; max wall time 15 minutes; per-trajectory cost cap set in config. On budget exhaustion, the agent is asked once for a final answer. | **Resolved 2026-11-25.** Accepted as proposed. |
+| D5 | Answer judge | The judge model and prompt from the official BrowseComp-Plus evaluation, fixed for both phases, with the model ID recorded. | **Resolved 2026-11-25.** Accepted. One judge model, version, and prompt for both phases, never changed between them. |
+| D6 | Failure similarity measure | Jaccard similarity on full label sets, plus primary-label agreement rate | **Resolved 2026-11-25.** Accepted as proposed. |
+| D7 | Annotation process | An LLM pre-labels each failed trajectory with step citations; the project author verifies every label. A second annotator re-labels 20% if available. Report LLM–human agreement (Cohen's κ) per label. | **Resolved 2026-11-25.** Accepted as proposed. |
+| D8 | Replications | 1 run per cell in the main matrix. Separate replication set in Phase 1: 3 tasks × 3 agents × 1 backbone × 2 extra runs = 18 trajectories, to estimate run-to-run variation. | **Resolved 2026-11-25.** Accepted as proposed. |
+| D9 | Total paid-API budget | To be set by the project author, in USD, for each phase | **Resolved 2026-11-25, provisional.** Hard cap of $30 for all paid API use, split as: Phase 1 $6, Phase 2 $12, judging and annotation $6, debugging and pilot $3, reserve $3. Prompt caching MUST be enabled for every provider that supports it; the 2026-11-25 estimate is about $20–30 with caching and $50–65 without. Before Phase 1, a pilot of about 3 trajectories per backbone on non-study tasks measures real token use, and the caps are re-checked against it. If the estimate exceeds a cap, revisit D3/D4 (document length, tool-call limit) or the budget before running. |
