@@ -1,105 +1,106 @@
 # Cross-Agent Failure Homogeneity in Deep Research
 
-An exploratory study of whether search agents and LLM backbones share failure mechanisms on **BrowseComp-Plus**. The focus is not only whether agents fail on the same questions, but whether they fail for similar underlying reasons.
+A small research pilot. Do different search agents and LLM backbones fail **for the same reasons** on hard information-seeking tasks, once task difficulty and evidence exposure are accounted for?
 
-> **Research question:** Do different search agents and LLM backbones exhibit shared failure mechanisms when solving difficult information-seeking tasks, after accounting for task difficulty and evidence exposure?
+The object of study is the *process* behind each failure (searches, documents seen and read, actions, final answer), not just accuracy.
 
-## Objectives
+## Design
 
-1. Identify common failure mechanisms across search agents.
-2. Compare failure patterns across LLM backbones.
-3. Examine whether common failures persist with stronger models.
-4. Analyze how evidence exposure and search behavior relate to final-answer correctness.
-5. Produce reproducible trajectory-level evidence to guide further research.
-
-## Experimental Design
-
-All agents search the full BrowseComp-Plus corpus (about 100K documents) through the same tools: `search` (top 5 results, 512-token snippets) and `get_document`. Scoring uses the benchmark's answers and evidence annotations.
-
-| Phase | Questions | Agents | Backbones | Thinking¹ | Trajectories |
-| --- | ---: | ---: | ---: | --- | ---: |
-| 1 · Failure discovery | 10 (7 hard, 3 moderately hard) | 3 | 3 low-cost | High | 90 |
-| 2 · Validation | 5 of the 10, preselected | 3 | 3 mid-tier | Medium | 45 |
+| Phase | Tasks | Agents | Models | Thinking | Trajectories |
+| --- | ---: | ---: | --- | --- | ---: |
+| 1 · Failure discovery | 10 (7 hard, 3 moderately hard) | 3 | 3 cheap | High | 90 |
+| 2 · Validation | 5 of the 10, chosen in advance | 3 | 3 mid-tier | Medium | 45 |
 | **Total** | | | | | **135** |
 
-¹ Where supported; provider thinking levels are not directly equivalent.
+One run per configuration. Debugging uses tasks outside the 10.
 
-Phase 1 uses High thinking to reduce avoidable reasoning-budget limitations. Debugging, replications, and evidence interventions are additional runs.
+### Models
 
-Task difficulty comes from the benchmark's published GPT-5 and o3 runs: a task is *hard* if exactly 1 of the 4 published runs solved it, *moderately hard* if exactly 2 did. Tasks are drawn with a fixed seed before any of our runs (see [specs/00-research-design.md](specs/00-research-design.md)).
-
-### Candidate Models
-
-| Provider | Phase 1 · High¹ | Phase 2 · Medium¹ |
+| Provider | Phase 1 · High | Phase 2 · Medium |
 | --- | --- | --- |
-| Anthropic | Claude Haiku 5.5 (`claude-haiku-5-5`) | Claude Sonnet 5.5 (`claude-sonnet-5-5`) |
-| OpenAI | GPT-6 Luna (`gpt-6-luna`) | GPT-6.1 Terra (`gpt-6.1-terra`) |
-| Google | Gemini 3.5 Flash-Lite (`gemini-3.5-flash-lite`) | Gemini 3.8 Flash (`gemini-3.8-flash`) |
+| Anthropic | `claude-haiku-5-5` | `claude-sonnet-5-5` |
+| OpenAI | `gpt-6-luna` | `gpt-6.1-terra` |
+| Google | `gemini-3.5-flash-lite` | `gemini-3.8-flash` |
 
-Exact API model IDs, reasoning controls, pricing, and token accounting are verified by a smoke test before any paid run.
+Models are matched by lineup position (each provider's smallest, then middle model), not by price. IDs and reasoning settings are checked with one real call each before any experiment. Gemini Flash-Lite defaults to `minimal` thinking, so it is set to `high` explicitly.
 
-### Agent Architectures
+### Agents
+
+All three use the same tools, corpus, prompt format, and budget.
 
 | Agent | Strategy |
 | --- | --- |
-| ReAct | Iterative reasoning and tool use |
-| Plan-and-Execute | Planning, execution, and replanning |
-| Evidence-Driven | Retrieval guided by evidence gaps |
+| ReAct | Think, search or read, observe, repeat |
+| Plan-and-Execute | Write a plan, execute its steps, replan when stuck |
+| Evidence-Driven | Keep a list of found evidence and open gaps; search for the biggest gap |
 
-## Evaluation
+### Benchmark and retrieval
 
-Score answers with the official BrowseComp-Plus judge (Qwen3-32B, official prompt, via a hosted API). Annotate failed trajectories with multiple labels where appropriate:
+- **BrowseComp-Plus**: 830 questions over a fixed corpus of about 100K documents. Retrieval always searches the full corpus.
+- **Tools**, as in the official setup: `search` returns the top 5 documents with 512-token snippets; `get_document` returns one document's text.
+- **Retriever**: the hosted Qwen3-Embedding-8B server that BrowseComp-Plus links to (NetMind) if it works, otherwise local BM25. Every search response is cached so runs can be replayed.
+- **Budget per run**: at most 30 tool calls (10 of them document reads) and 15 minutes. When the budget runs out, the agent is asked once for its final answer.
 
-- Query formulation
-- Retrieval
-- Evidence selection
-- Evidence utilization
-- Reasoning or synthesis
-- Verification
-- Premature commitment
-- Stopping
+### Choosing the 10 tasks
 
-Compare failure mechanisms across backbones and architectures on the same tasks, across phases, and by relevant evidence exposure. An LLM proposes labels that cite specific trace events; every label is verified by hand.
+BrowseComp-Plus has no difficulty labels. It does publish four complete runs: GPT-5 and o3, each with BM25 and Qwen3-Embedding-8B. We score those runs with the official judge, then:
 
-## Reproducibility
+- **hard**: solved by exactly 1 of the 4 runs;
+- **moderately hard**: solved by exactly 2 of the 4.
 
-Record exact model IDs and settings, task and agent IDs, queries and search metadata, retrieved versus actually read documents, tool actions, planning updates, final answers, correctness, available token usage, latency, costs, and failure annotations.
+Each task must have annotated evidence and gold documents. Candidates are shuffled with seed `20261125` and checked by hand for ambiguous answers. The first 7 hard and 3 moderately hard that pass are kept. The Phase 2 subset (3 hard + 2 moderately hard) is drawn with the same seed before any of our runs. Our own models' results never affect the choice.
 
-## Project Structure
+### Scoring and analysis
 
-```text
-.
-├── README.md                      # Overview and research goals
-├── AGENTS.md                      # SDD implementation rules
-├── specs/
-│   ├── 00-research-design.md      # Research question and controls
-│   ├── 01-benchmark.md            # BrowseComp-Plus setup
-│   ├── 02-model-providers.md      # Adapters and thinking levels
-│   ├── 03-agent-harnesses.md      # Agent architectures
-│   ├── 04-trajectory-logging.md   # Execution traces
-│   ├── 05-experiment-runner.md    # Two-phase orchestration
-│   ├── 06-failure-analysis.md     # Taxonomy and judging
-│   └── 07-results-report.md       # Analysis and deliverables
-├── src/                           # Implementations
-├── configs/                       # Model and experiment settings
-├── tests/                         # Unit and integration tests
-└── results/                       # Traces, annotations, and reports
-```
+- **Correctness**: the official BrowseComp-Plus judge (Qwen3-32B with the official prompt), through a hosted API.
+- **Failure labels**: an LLM proposes labels for each failed run, citing specific trace events, and every label is checked by hand. Labels: query formulation, retrieval, evidence selection, evidence utilization, reasoning or synthesis, verification, premature commitment, stopping. A run can have several.
+- **Evidence exposure**: for each annotated evidence document, whether it was retrieved, read, or cited.
+- **Comparison**: on the same task, how similar the failure labels are across models, across agents, and across phases (Jaccard similarity against a shuffled baseline), plus example cases.
 
-This is the planned layout; implementation files will be added during development.
+## Logging
+
+Every run writes a JSONL trace with:
+
+- run, task, agent, exact model ID, and reasoning settings;
+- every search query, with the ranked docids, scores, and snippets returned;
+- every document opened;
+- every model action and tool response, plus plan and evidence-list updates;
+- the final answer and its judged correctness;
+- tokens (input, cached, output, reasoning where reported), latency, and estimated cost.
+
+Reasoning text is logged only as each provider exposes it (for example, summaries). Raw chain of thought is never claimed.
 
 ## Budget
 
-Hard cap of **$30** for all paid API calls, with prompt caching required. The current estimate is about $25–35 for everything, including the pilot, judging, and labeling. It drops to about $20–30 if the Gemini runs use Google AI Pro developer credits. A smoke test and a pilot re-check the estimate before the main runs.
+A hard cap of **$30** for all API calls, with prompt caching on. The estimate is about $25–35 with caching. It drops to about $20–30 if the Gemini runs use Google AI Pro developer credits. A smoke test on a few non-study tasks measures real costs before the 135 runs, and nothing paid runs without explicit approval.
 
-## Development
+## Project structure
 
-Follow **Spec-Driven Development (SDD)** in dependency order: specification → implementation tasks → tests → acceptance criteria → review.
+```text
+.
+├── README.md
+├── AGENTS.md              # how to work in this repo
+├── specs/
+│   ├── 01-setup.md        # tasks, models, retrieval
+│   ├── 02-agents.md       # three agents and trajectory logging
+│   ├── 03-experiments.md  # running the two phases with cost limits
+│   └── 04-analysis.md     # comparing failed trajectories
+├── src/
+│   ├── benchmark.py       # data, retrieval, judge, task selection
+│   ├── models.py          # one wrapper per provider, plus a mock
+│   ├── agents.py          # the three agents and the trace logger
+│   ├── runner.py          # runs a phase, enforces budgets, resumes
+│   └── analyze.py         # exposure, labels, similarity, examples
+├── configs/               # models, tasks, budgets
+├── results/               # traces and analysis outputs
+└── tests/
+```
 
-Do not run the full paid experiment until all infrastructure and logging specifications pass.
+`data/` holds the downloaded benchmark files and is never committed: BrowseComp-Plus asks that its questions and answers never appear as plain text online.
 
-## Deliverables and Limitations
+## Limitations
 
-Deliver a reproducible repository, complete configurations, structured trajectories, cost and token reports, failure similarity analysis, qualitative case studies, and a final report for supervisor review with follow-up experiments.
-
-This is an exploratory pilot, not a large-scale statistical study. High thinking may reduce reasoning-budget limitations but cannot remove weak-model capability differences. Because the two phases differ in both models and reasoning levels, cross-phase differences cannot be attributed to model capability alone. A follow-up study may use matched-evidence interventions to test the mechanisms the pilot suggests.
+- Ten tasks and one run per configuration support descriptive findings only.
+- Phase 1 and Phase 2 change both the models and the thinking level, so differences between phases are not a pure capability effect.
+- Provider thinking levels are not directly equivalent.
+- Difficulty is measured on GPT-5 and o3, a proxy for how hard tasks are for our models.

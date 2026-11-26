@@ -1,108 +1,47 @@
 # AGENTS.md
 
-Rules for anyone, human or coding agent, implementing this repository. Read [README.md](README.md) and the relevant spec in [specs/](specs/) before changing code.
+How to work in this repository. It is a small research pilot: keep the code compact and the experiment valid.
 
-Priorities, in order: scientific validity, reproducibility, complete trajectory logging, low experimental cost.
+## Workflow
 
-## 1. Spec-Driven Development
+Work through the specs in order: `01-setup` → `02-agents` → `03-experiments` → `04-analysis`. For each spec:
 
-No implementation without an approved spec.
+1. Read it and propose a short plan.
+2. Implement it, with tests.
+3. Check its "Done when" list and note the evidence for each item.
+4. Open one pull request for that spec, then stop until it is reviewed.
 
-### Spec lifecycle
+Each spec has: Goal, Requirements, Design notes, Done when, Open questions.
 
-Each spec has a `Status` field in its header:
+## Keep it small
 
-| Status | Meaning | Who changes it |
-| --- | --- | --- |
-| `Draft` | Being written; open decisions remain | Author |
-| `Approved` | All decisions resolved; ready to implement | Human reviewer |
-| `Implemented` | Code and tests exist for every requirement | Implementer |
-| `Verified` | All acceptance criteria pass and were reviewed | Human reviewer |
+- Plain Python 3.11 with `uv`, `pytest`, and the official provider SDKs.
+- Five modules in `src/`: `benchmark.py`, `models.py`, `agents.py`, `runner.py`, `analyze.py`.
+- No frontend, database server, task queue, or deployment. Traces are JSONL files; outputs are CSV, JSON, or Markdown.
+- Settings (model IDs, thinking levels, budgets, task IDs) live in `configs/`, not in code.
 
-Implement only `Approved` specs. Never mark your own work `Verified`.
+## Paid API calls
 
-### Required spec sections
+- Tests never call paid APIs; they use the mock model.
+- Every command that can spend money supports `--dry-run` with a cost estimate, and stops at the budget caps in `configs/`.
+- Paid runs need explicit approval from the project author each time. Never start one on your own.
 
-Every spec in `specs/` contains:
+## Keeping the experiment valid
 
-1. Goal and scope
-2. Functional requirements (numbered `R1`, `R2`, …, using MUST / SHOULD / MAY)
-3. Technical design
-4. Implementation tasks (`T1`, `T2`, …, each traceable to requirements)
-5. Interfaces and data contracts
-6. Testing requirements (each traceable to requirements)
-7. Acceptance criteria (`AC1`, `AC2`, …, checkable and binary)
-8. Dependencies and risks
+- Agents never see answers, evidence labels, or gold documents. A test checks this.
+- Retrieval always searches the full corpus.
+- All three agents get the same tools, corpus, prompt format, and budget.
+- Debug on tasks outside the 10 study tasks.
+- Don't change prompts, budgets, tools, or the task list after Phase 1 starts. If a change is unavoidable, record it in the README with the date and reason.
+- API errors and crashes are not study failures: log them and rerun.
+- Never edit raw traces in `results/`; analysis regenerates everything from them.
 
-Open decisions go in a final "Open decisions" section, which must be empty before approval.
+## Trajectory logging is not optional
 
-### Dependency order
+Every run logs every search query and its results, every document opened, every action and tool response, the final answer, and token usage and cost. Log reasoning only as the provider returns it, and never call a summary the model's chain of thought.
 
-```text
-00-research-design
-├── 01-benchmark ─────────────┐
-├── 02-model-providers ───────┤
-└── 04-trajectory-logging ────┼──> 03-agent-harnesses ──> 05-experiment-runner
-                              │                                  │
-                              └──> 06-failure-analysis <─────────┘
-                                          │
-                                          v
-                                   07-results-report
-```
+## Benchmark data
 
-The logging schema (04) comes before the harnesses (03) because the harnesses emit it. Do not start a spec until its dependencies are `Approved`, and do not build on code from a spec that is not `Implemented`.
-
-### Workflow for each spec
-
-1. Read the spec and its dependencies.
-2. Propose an implementation plan.
-3. Implement the smallest testable components.
-4. Write and run the tests.
-5. Verify every acceptance criterion and record the evidence.
-6. Update documentation.
-7. Report completion and any deviations.
-
-Each spec is delivered as its own branch (`spec/NN-name`) and pull request. The PR description maps each acceptance criterion to its evidence (test name, output file, or command). Stop and wait for human review before starting the next spec.
-
-## 2. Cost and paid-API safety
-
-- Tests MUST NOT call paid APIs. Use the fake provider (spec 02).
-- Any command that calls a paid API MUST support `--dry-run`, which prints the planned calls and an estimated cost without making them.
-- Paid runs require explicit human approval for each invocation. A coding agent never starts one on its own.
-- Every paid run enforces the per-run and total caps in `configs/`. It stops when a cap is reached, never warns and continues.
-- Before the 135-trajectory matrix: a smoke test, a pilot, and a cost estimate that fits the budget (spec 00, R12).
-- Do not run the Phase 1 or Phase 2 matrix until specs 01–05 are `Verified`.
-- Debugging and prompt development use tasks outside the 10 study tasks (spec 00, R6).
-
-## 3. Experimental integrity
-
-- Agents MUST NOT have access to ground-truth answers, evidence annotations, or gold-document labels. These are used only by scoring and analysis code. Keep a test that fails if they reach any agent input.
-- Retrieval runs over the full corpus, never only the selected tasks' documents.
-- All three agent architectures use the same tools, corpus, retriever, budgets, and answer format. Architecture-specific logic lives only in the harness.
-- Model IDs, reasoning settings, budgets, prompts, and task lists live in `configs/`, never hard-coded.
-- After the Phase 1 freeze (spec 00, R10), any change to prompts, budgets, tools, task lists, or taxonomy is a deviation. Record it in spec 00, Appendix B, before running anything under it.
-- Never edit or delete raw outputs in `results/`. Derived data is regenerated from raw data by scripts.
-- Infrastructure failures (API errors, timeouts, crashes) are not study failures. Log them, exclude them from analysis, and rerun under the same settings.
-- Log reasoning only as the provider exposes it. Never describe a reasoning summary as the model's chain of thought.
-
-## 4. Benchmark data handling
-
-- BrowseComp-Plus asks that its data never appear as plain text online. Decrypted queries, answers, corpus text, and published run files live only under `data/`, which is gitignored.
-- Never commit, paste into issues or PRs, or send to any service other than the configured model, retriever, and judge APIs any decrypted question, answer, or document text.
-- Only task IDs, docids, and aggregate metrics may be committed. Trajectory logs under `results/` contain question and document text, so they are committed only in encrypted form or kept out of git, as decided in spec 04.
-
-## 5. Reproducibility
-
-Every run writes a manifest with: git commit hash, dirty-tree flag, config file hashes, exact model IDs and provider parameters as sent, retriever and index version, random seeds, and start/end timestamps. The full per-run record is defined in spec 04.
-
-## 6. Secrets
-
-- API keys come from environment variables only. `.env` files are gitignored.
-- Keys and auth headers MUST NOT appear in logs, traces, manifests, or error messages. Logging code redacts them.
-
-## 7. Code conventions
-
-- Python 3.11, managed with `uv`; type hints on public functions; `pytest` for tests.
-- Keep the benchmark layer, provider adapters, harnesses, logging, runner, and analysis in separate packages under `src/`. Harnesses depend on the provider interface, not on a vendor SDK.
-- Trajectories are JSON Lines, one event per line, following spec 04.
-- Reference spec and requirement IDs (for example `03/R4`) in commit messages.
+- Decrypted questions, answers, and document text live only in `data/`, which is gitignored.
+- Traces contain question and document text. Commit them only encrypted, using the same canary scheme BrowseComp-Plus uses for its own run files.
+- API keys come from environment variables and never appear in logs.
