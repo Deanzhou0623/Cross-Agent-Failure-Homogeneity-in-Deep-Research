@@ -1,0 +1,2 @@
+run_id,judge_verdict,final_verdict,reason,date,reviewer
+phase2-417-evidence_driven-flash,incorrect,correct,format only (capitalization),2026-11-27,claude-opus-5-5 (pending user confirmation)

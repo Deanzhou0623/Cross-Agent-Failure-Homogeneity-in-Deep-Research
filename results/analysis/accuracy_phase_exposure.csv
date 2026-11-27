@@ -1,0 +1,7 @@
+group,correct,runs,accuracy
+phase1 E0,0,30,0.0
+phase1 E1,17,26,0.654
+phase1 E2,29,34,0.853
+phase2 E0,0,6,0.0
+phase2 E1,13,14,0.929
+phase2 E2,18,25,0.72

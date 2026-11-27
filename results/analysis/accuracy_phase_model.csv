@@ -1,0 +1,7 @@
+group,correct,runs,accuracy
+phase1 flash_lite,9,30,0.3
+phase1 haiku,25,30,0.833
+phase1 luna,12,30,0.4
+phase2 flash,12,15,0.8
+phase2 sonnet,8,15,0.533
+phase2 terra,11,15,0.733

@@ -101,6 +101,12 @@ uv run python -m src.benchmark candidates  # then screen configs/task_screening.
 uv run python -m src.benchmark finalize    # writes configs/tasks.yaml
 uv run python -m src.benchmark sample --model haiku   # one query end to end
 uv run python -m src.agents try --agent react --model haiku   # one agent run on a non-study task
+
+# analysis (spec 04), after both phases are judged
+uv run python -m src.analyze prelabel-inputs   # condensed traces of failed runs (local only)
+uv run python -m src.analyze review-files      # checklists in results/review/runs/ (local only)
+uv run python -m src.analyze export-labels     # reviewed checklists -> results/review/labels.csv
+uv run python -m src.analyze                   # results/analysis/ (add --draft to fill in pre-labels)
 ```
 
 ## Project structure
@@ -134,6 +140,9 @@ uv run python -m src.agents try --agent react --model haiku   # one agent run on
 - Provider thinking levels are not directly equivalent.
 - Difficulty is measured on GPT-5 and o3, a proxy for how hard tasks are for our models.
 - The only hosted Qwen3-32B judge is fp8. It scores the published runs 3.5–5.5 points below the leaderboard, mostly by rejecting answers that differ only in formatting, so every "incorrect" verdict on our runs is checked by hand.
+- Plan-and-Execute makes its planning call with tools disabled (spec 02). The OpenAI models often read this as having no research tools: in 9 Luna and Terra runs they answered "unable to determine" at the planning call, and in one more Luna run they reported every step blocked. This lowers Plan-and-Execute accuracy for those two models; the analysis labels these runs `stopping`.
+- Failure labels come from one labeler (Claude) and a blind second rater of the same model family, then human review; κ between the two Claude raters is an upper bound on reliability.
+- One task (417) is close to ambiguous: the person uses two animal nicknames, and almost every failed run gave the other one. Shared failures there may reflect the question more than the agents.
 
 ## Change log
 
