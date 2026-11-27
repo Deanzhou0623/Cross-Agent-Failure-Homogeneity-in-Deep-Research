@@ -5,7 +5,7 @@ max_model_calls: 40         # includes planning and ledger turns; the final-answ
 max_output_tokens: 16000    # per model call, thinking included
 max_wall_minutes: 15
 cost_cap_usd:               # per run; ~5x the expected average from the budget estimate
-  phase1: 0.40
+  phase1: 0.40              # smoke runs use the cap of the model's own phase
   phase2: 1.50
   debug: 0.40
 # Plan-and-Execute: a step is blocked after this many tool calls in a row that surface no new docid
@@ -15,3 +15,16 @@ degenerate:
   min_visible_chars: 200     # non-whitespace characters in the visible text
   max_repeated_line: 20      # one line repeated this many times
   retries: 2
+
+# Runner caps (spec 03, item 3). The runner stops before a run that could cross a cap.
+caps_usd:
+  smoke: 4.0                # smoke test and debugging
+  phase1: 6.0
+  phase2: 13.0
+  total: 30.0               # Anthropic + OpenAI + OpenRouter (judge, query embeddings); not Gemini
+  google_credits: 15.0      # Gemini, billed to Google AI Pro developer credits
+# Spending before the runner existed that no trace or judge cache records (spec 01/02 checks).
+prior_spend_usd: {total: 0.02, google_credits: 0.10}
+# Dry-run estimate per run when no smoke-test traces exist yet (from the README budget).
+fallback_estimate_usd_per_run: {phase1: 0.07, phase2: 0.30}
+max_attempts: 4             # 1 try + up to 3 retries with the same settings, then `missing`

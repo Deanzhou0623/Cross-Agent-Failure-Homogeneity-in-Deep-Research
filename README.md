@@ -72,7 +72,18 @@ Reasoning text is logged only as each provider exposes it (for example, summarie
 
 ## Budget
 
-A hard cap of **$30** for all API calls, with prompt caching on. The estimate is about $25–35 with caching. It drops to about $20–30 if the Gemini runs use Google AI Pro developer credits. A smoke test on a few non-study tasks measures real costs before the 135 runs, and nothing paid runs without explicit approval.
+A hard cap of **$30** for Anthropic, OpenAI, and OpenRouter (judge and query embeddings), and a separate **$15** cap for Gemini, which is billed to Google AI Pro developer credits. Prompt caching is on, and nothing paid runs without explicit approval. Per-phase caps: smoke test $4, Phase 1 $6, Phase 2 $13.
+
+The smoke test (18 runs on 3 non-study tasks, 2026-11-27) cost $1.53. Measured cost per run sets the estimates:
+
+| Model | Per run | | Model | Per run |
+| --- | ---: | --- | --- | ---: |
+| `claude-haiku-5-5` | $0.046 | | `claude-sonnet-5-5` | $0.164 |
+| `gpt-6-luna` | $0.010 | | `gpt-6.1-terra` | $0.051 |
+| `gemini-3.5-flash-lite` | $0.100 | | `gemini-3.8-flash` | $0.138 |
+| **Phase 1 (90 runs)** | **≈ $4.7** | | **Phase 2 (45 runs)** | **≈ $5.3** |
+
+Projected total: about $9–10 against the $30 cap, and about $6 of Gemini credits. Phase 2 is planned before 2027-01-01, when Gemini 3.8 Flash's price doubles.
 
 ## Quick start
 
