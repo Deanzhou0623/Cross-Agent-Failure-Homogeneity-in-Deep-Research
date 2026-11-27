@@ -63,7 +63,7 @@ This is the scientific foundation of the study, so nothing is skipped.
 ## Design notes
 
 - One file, `src/agents.py`: a `Trace` class (an append-only JSONL writer), a `Budget` class, the shared `ToolBox`, and three functions `react(...)`, `plan_execute(...)`, `evidence_driven(...)`, each about 100–150 lines.
-- Full prompts make traces large (about 5–10 MB per run, about 1 GB for 135 runs, because each call resends the growing conversation). They are highly repetitive, so committed traces are gzip-compressed before the canary encryption (spec 03).
+- Full prompts make traces large (about 5–10 MB per run, about 1 GB for 135 runs, because each call resends the growing conversation). They are highly repetitive, so committed traces are xz-compressed before the canary encryption (spec 03). *2026-11-27: xz, not gzip: gzip's 32 KB window misses the repetition (smoke test 38.7 MB → gzip 12.1 MB, xz 1.0 MB).*
 - The mock model in `src/models.py` replays a scripted sequence of tool calls and a final answer, so all three agents can be tested without API calls.
 
 ## Done when

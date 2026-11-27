@@ -8,7 +8,7 @@ data/
 !.env.example
 
 # Raw traces and judgments are committed only in encrypted form (`python -m src.runner pack`):
-# <file>.jsonl.gz.enc, gzip + the BrowseComp-Plus canary XOR. Debug traces stay local.
+# <file>.jsonl.xz.enc, xz + the BrowseComp-Plus canary XOR. Debug traces stay local.
 results/**/*.jsonl
 results/debug/
 

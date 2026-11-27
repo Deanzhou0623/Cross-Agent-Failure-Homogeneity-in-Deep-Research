@@ -4,7 +4,7 @@
     python -m src.runner run --phase 1 --confirm [--workers 3] [--only AGENT/MODEL/TASK]
     python -m src.runner judge --phase 1        # results/<phase>/judgments.jsonl
     python -m src.runner summarize --phase 1    # results/<phase>/summary.csv + cost_report.json
-    python -m src.runner pack --phase 1         # gzip + canary-encrypt traces and judgments for committing
+    python -m src.runner pack --phase 1         # xz + canary-encrypt traces and judgments for committing
     python -m src.runner unpack --phase 1       # decrypt them back
     python -m src.runner verify --phase 1       # judge/summary are reproducible; replay cache serves every search
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import csv
-import gzip
+import lzma
 import hashlib
 import io
 import json
@@ -383,11 +383,15 @@ def _plain_files(phase: str, results: Path) -> list[Path]:
 
 
 def pack(phase: str, results: Path = RESULTS) -> int:
-    """gzip, then the BrowseComp-Plus canary XOR: <file>.gz.enc next to each trace and judgments.jsonl."""
+    """xz, then the BrowseComp-Plus canary XOR: <file>.xz.enc next to each trace and judgments.jsonl.
+
+    xz rather than gzip: each model call repeats the whole growing prompt, and gzip's 32 KB window
+    cannot see that repetition (smoke test: 38.7 MB raw -> 12.1 MB gzip, 1.0 MB xz).
+    """
     n = 0
     for p in _plain_files(phase, results):
-        enc = p.with_name(p.name + ".gz.enc")
-        blob = _xor(gzip.compress(p.read_bytes(), mtime=0))
+        enc = p.with_name(p.name + ".xz.enc")
+        blob = _xor(lzma.compress(p.read_bytes(), preset=9 | lzma.PRESET_EXTREME))
         if not enc.exists() or enc.read_bytes() != blob:
             enc.write_bytes(blob)
             n += 1
@@ -396,10 +400,10 @@ def pack(phase: str, results: Path = RESULTS) -> int:
 
 def unpack(phase: str, results: Path = RESULTS) -> int:
     n = 0
-    for enc in sorted((results / phase).rglob("*.jsonl.gz.enc")):
-        plain = enc.with_name(enc.name.removesuffix(".gz.enc"))
+    for enc in sorted((results / phase).rglob("*.jsonl.xz.enc")):
+        plain = enc.with_name(enc.name.removesuffix(".xz.enc"))
         if not plain.exists():
-            plain.write_bytes(gzip.decompress(_xor(enc.read_bytes())))
+            plain.write_bytes(lzma.decompress(_xor(enc.read_bytes())))
             n += 1
     return n
 

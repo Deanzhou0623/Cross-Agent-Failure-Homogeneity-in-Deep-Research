@@ -1,0 +1,44 @@
+{
+  "actual_usd": 1.5272,
+  "by_model": {
+    "flash": {
+      "actual_usd": 0.413,
+      "actual_usd_per_run": 0.1377,
+      "estimated_usd_per_run": 0.3,
+      "runs": 3
+    },
+    "flash_lite": {
+      "actual_usd": 0.3004,
+      "actual_usd_per_run": 0.1001,
+      "estimated_usd_per_run": 0.07,
+      "runs": 3
+    },
+    "haiku": {
+      "actual_usd": 0.1383,
+      "actual_usd_per_run": 0.0461,
+      "estimated_usd_per_run": 0.07,
+      "runs": 3
+    },
+    "luna": {
+      "actual_usd": 0.0293,
+      "actual_usd_per_run": 0.0098,
+      "estimated_usd_per_run": 0.07,
+      "runs": 3
+    },
+    "sonnet": {
+      "actual_usd": 0.4921,
+      "actual_usd_per_run": 0.164,
+      "estimated_usd_per_run": 0.3,
+      "runs": 3
+    },
+    "terra": {
+      "actual_usd": 0.1541,
+      "actual_usd_per_run": 0.0514,
+      "estimated_usd_per_run": 0.3,
+      "runs": 3
+    }
+  },
+  "correct": 13,
+  "estimated_usd": 3.33,
+  "runs": 18
+}

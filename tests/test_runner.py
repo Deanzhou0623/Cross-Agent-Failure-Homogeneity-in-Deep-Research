@@ -116,13 +116,13 @@ def test_judge_summary_pack_are_reproducible(tmp_path, monkeypatch):
 
     n = rn.pack("phase1", res)
     assert n == 5 and rn.pack("phase1", res) == 0                      # 4 traces + judgments; idempotent
-    enc = sorted((res / "phase1").rglob("*.gz.enc"))
-    plain = {e: e.with_name(e.name.removesuffix(".gz.enc")).read_bytes() for e in enc}
+    enc = sorted((res / "phase1").rglob("*.xz.enc"))
+    plain = {e: e.with_name(e.name.removesuffix(".xz.enc")).read_bytes() for e in enc}
     assert all(b"Seine" not in e.read_bytes() and b"paris" not in e.read_bytes() for e in enc)
     for e in enc:
-        e.with_name(e.name.removesuffix(".gz.enc")).unlink()
+        e.with_name(e.name.removesuffix(".xz.enc")).unlink()
     assert rn.unpack("phase1", res) == 5
-    assert all(e.with_name(e.name.removesuffix(".gz.enc")).read_bytes() == b for e, b in plain.items())
+    assert all(e.with_name(e.name.removesuffix(".xz.enc")).read_bytes() == b for e, b in plain.items())
 
 
 def test_replay_cache_serves_logged_searches(tmp_path):
