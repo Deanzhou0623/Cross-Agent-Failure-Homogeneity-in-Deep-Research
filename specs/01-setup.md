@@ -19,7 +19,8 @@ Load the benchmark, choose the 10 tasks, connect a full-corpus retriever and the
 4. Two tools, matching the official setup:
    - `search(query)`: top 5 hits from the **full corpus**, each `{rank, docid, score, snippet}`, with the snippet cut to 512 tokens using the Qwen3-0.6B tokenizer;
    - `get_document(docid)`: the document text, cut to 4,096 tokens, with a `truncated` flag.
-5. Backend: the hosted NetMind Qwen3-Embedding-8B server. If it is unavailable or fails the check in item 6, use local BM25 instead (official prebuilt index, 2.2 GB, needs Java 21).
+5. Backend: Qwen3-Embedding-8B, the retriever of the stronger published runs. The official precomputed corpus index (1.6 GB) and the corpus (1.8 GB) are downloaded to `data/` and searched locally by inner product; each query is embedded through OpenRouter's hosted Qwen3-Embedding-8B, pinned to one provider, with the official query prefix. If this fails the check in item 6, use local BM25 instead (official prebuilt index, 2.2 GB, needs Java 21).
+   *Changed 2026-11-26: the plan was NetMind's hosted server, but `mcp.netmind.ai` no longer resolves.*
 6. Quick check: run 100 raw questions as plain retrieval queries. Evidence Recall@5 should land near the published value (Qwen3-8B 0.145, BM25 0.012).
 7. Cache every response on disk, keyed by backend + query (or docid). A `--replay` mode serves from the cache only.
 
@@ -30,6 +31,7 @@ Load the benchmark, choose the 10 tasks, connect a full-corpus retriever and the
 ### Task selection (`src/benchmark.py`, output in `configs/tasks.yaml`)
 
 9. Download the four published runs (GPT-5 and o3, each with BM25 and Qwen3-8B; about 1.3 GB) and judge all 830 answers in each, for about $0.60. The four accuracies should land within about 2 points of the leaderboard (57.6, 50.5, 71.7, 65.9); this also checks the judge setup.
+   *Result 2026-11-26 (OpenRouter → DeepInfra): 53.1, 47.0, 66.1, 60.8, i.e. 3.5–5.5 points low in every run, so the check does not pass. Settings and answer extraction match the official evaluator; every hosted Qwen3-32B is fp8, and it rejects some answers over capitalization or punctuation only. Decision: keep the official judge and add human checks. `show` prints the published runs' verdicts during screening, and in analysis every "incorrect" verdict on our runs is checked by hand before labeling, with any override logged.*
 10. Strata: **hard** = solved by exactly 1 of the 4 runs; **moderately hard** = exactly 2. Keep only tasks with at least one evidence and one gold document.
 11. Shuffle each stratum with seed `20261125`. Write the ordered candidates to `configs/task_screening.yaml` for a manual ambiguity check (accept or reject, with a reason).
 12. Take the first 7 accepted hard and 3 accepted moderately hard tasks. Then draw the Phase 2 subset (3 hard + 2 moderately hard) with the same seed. Write `configs/tasks.yaml` with the IDs, each task's stratum, its per-run results, and a one-line rationale. Rerunning gives the same file.
@@ -63,6 +65,6 @@ Load the benchmark, choose the 10 tasks, connect a full-corpus retriever and the
 
 ## Open questions
 
-1. NetMind's terms, rate limits, and cost are unknown; they need a NetMind token to check.
+1. ~~NetMind's terms and cost.~~ Moot: the server is gone (see item 5).
 2. Which judge provider, DeepInfra or OpenRouter? Pick the one whose check (item 9) passes at lower cost.
 3. Downloading and decrypting the data needs the project author to run the command, or to allow it in Claude Code's permission settings.

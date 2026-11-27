@@ -9,13 +9,25 @@ published_runs:            # path in runs_repo -> leaderboard accuracy (Qwen3-32
   qwen3-embed-8b/o3.jsonl: 65.90
 
 retrieval:
-  backend: netmind         # netmind | bm25
-  netmind_url: "https://mcp.netmind.ai/sse/{token}/browsecomp-plus/sse"
+  # 2026-11-26: NetMind's hosted server is gone (mcp.netmind.ai no longer resolves). Same retriever,
+  # run locally: the official precomputed corpus index + hosted query embeddings (same model).
+  backend: qwen3-embedding-8b
+  index_repo: Tevatron/browsecomp-plus-indexes
+  index_dir: qwen3-embedding-8b
+  index_shards: 4
+  corpus_repo: Tevatron/browsecomp-plus-corpus
+  query_embedding:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    model: qwen/qwen3-embedding-8b
+    pin_provider: DeepInfra
+    price_per_m_tokens: 0.01
+    task_prefix: "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
   k: 5
   snippet_max_tokens: 512
   document_max_tokens: 4096
   snippet_tokenizer: Qwen/Qwen3-0.6B
-  published_evidence_recall_at_5: {netmind: 0.1453, bm25: 0.0118}
+  published_evidence_recall_at_5: {qwen3-embedding-8b: 0.1453, bm25: 0.0118}
 
 judge:
   model: Qwen/Qwen3-32B

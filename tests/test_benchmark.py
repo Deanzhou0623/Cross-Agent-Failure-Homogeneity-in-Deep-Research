@@ -159,11 +159,12 @@ def test_task_view_has_no_answer_or_qrels():
 
 def test_published_run_parsing(tmp_path):
     p = tmp_path / "run.jsonl"
-    rows = [{"query_id": "1", "status": "completed", "result": [{"type": "output_text", "output": "Exact Answer: x"}]},
+    rows = [{"query_id": "1", "status": "completed", "result": [{"type": "output_text", "output": "Exact Answer: x"}]},
             {"query_id": "2", "status": "max_tokens", "result": [{"type": "output_text", "output": "partial"}]},
             {"query_id": "3", "status": "completed", "result": [{"type": "tool_call", "output": "..."}]}]
-    p.write_text("\n".join(json.dumps(r) for r in rows))
-    assert bm.published_run_responses(p) == {"1": "Exact Answer: x", "2": None, "3": None}
+    # ensure_ascii=False keeps U+2028 raw, as in the published files; str.splitlines() would split on it
+    p.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+    assert bm.published_run_responses(p) == {"1": "Exact Answer: x", "2": None, "3": None}
 
 
 def test_cost_computation():
@@ -200,7 +201,7 @@ def test_no_benchmark_text_in_tracked_files():
     queries = bm.DATA / "queries.jsonl"
     if not queries.exists():
         pytest.skip("benchmark data not downloaded")
-    answers = {json.loads(l)["answer"].strip() for l in queries.read_text(encoding="utf-8").splitlines()}
+    answers = {json.loads(l)["answer"].strip() for l in queries.read_text(encoding="utf-8").split("\n") if l.strip()}
     answers = {a for a in answers if len(a) >= 6}
     tracked = subprocess.run(["git", "ls-files"], cwd=bm.ROOT, capture_output=True, text=True).stdout.split()
     for rel in tracked:
@@ -209,3 +210,54 @@ def test_no_benchmark_text_in_tracked_files():
             body = path.read_text(encoding="utf-8", errors="ignore")
             leaked = [a for a in answers if a in body]
             assert not leaked, f"{rel} contains benchmark answer text"
+
+
+def _tiny_dense(tmp_path):
+    import numpy as np
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    (tmp_path / "index").mkdir()
+    (tmp_path / "corpus").mkdir()
+    emb = np.eye(4, dtype=np.float32)  # doc i points along axis i
+    np.save(tmp_path / "index" / "embeddings.npy", emb)
+    (tmp_path / "index" / "docids.json").write_text(json.dumps(["a", "b", "c", "d"]))
+    pq.write_table(pa.table({"docid": ["a", "b", "c", "d"], "text": ["ta", "tb", "tc", "td"]}),
+                   tmp_path / "corpus" / "part.parquet")
+    (tmp_path / "manifest.json").write_text(json.dumps({"index": {"revision": "abc123def456789"}}))
+    seen = []
+
+    def fake_embed(text):
+        seen.append(text)
+        return [0.0, 3.0, 1.0, 0.0], 7  # unnormalized: b first, then c
+
+    return bm.DenseBackend(CFG, embed_fn=fake_embed, data_dir=tmp_path), seen
+
+
+def test_dense_backend_ranks_by_inner_product_with_official_prefix(tmp_path):
+    backend, seen = _tiny_dense(tmp_path)
+    hits = backend.search("who?", 2)
+    assert [h["docid"] for h in hits] == ["b", "c"] and hits[0]["text"] == "tb"
+    assert hits[0]["score"] == pytest.approx(3 / 10 ** 0.5)  # query is L2-normalized
+    assert seen == [CFG["retrieval"]["query_embedding"]["task_prefix"] + "who?"]
+    assert backend.last_usage["embedding_tokens"] == 7
+    assert backend.get_document("d") == "td" and backend.get_document("zz") is None
+    assert "qwen/qwen3-embedding-8b" in backend.index_version
+
+
+def test_index_unpickler_blocks_code():
+    import io
+    import pickle
+
+    import numpy as np
+
+    good = pickle.dumps((np.ones((2, 3), dtype=np.float32), ["x", "y"]))
+    reps, ids = bm._ArrayUnpickler(io.BytesIO(good)).load()
+    assert reps.shape == (2, 3) and ids == ["x", "y"]
+
+    class Evil:
+        def __reduce__(self):
+            return (print, ("pwned",))
+
+    with pytest.raises(pickle.UnpicklingError):
+        bm._ArrayUnpickler(io.BytesIO(pickle.dumps(Evil()))).load()

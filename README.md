@@ -38,7 +38,7 @@ All three use the same tools, corpus, prompt format, and budget.
 
 - **BrowseComp-Plus**: 830 questions over a fixed corpus of about 100K documents. Retrieval always searches the full corpus.
 - **Tools**, as in the official setup: `search` returns the top 5 documents with 512-token snippets; `get_document` returns one document's text.
-- **Retriever**: the hosted Qwen3-Embedding-8B server that BrowseComp-Plus links to (NetMind) if it works, otherwise local BM25. Every search response is cached so runs can be replayed.
+- **Retriever**: Qwen3-Embedding-8B, as in the stronger published runs: the official corpus index is searched locally, and only each query is embedded through a hosted API (about $0.01 per 1M tokens). Local BM25 is the fallback. Every search response is cached so runs can be replayed.
 - **Budget per run**: at most 30 tool calls (10 of them document reads) and 15 minutes. When the budget runs out, the agent is asked once for its final answer.
 
 ### Choosing the 10 tasks
@@ -82,6 +82,7 @@ cp .env.example .env                       # then fill in the API keys
 uv run pytest                              # offline tests, no keys needed
 
 uv run python -m src.benchmark download    # queries, answers, qrels, published runs -> data/
+uv run python -m src.benchmark download-index   # search index + corpus, ~3.4 GB -> data/
 uv run python -m src.models check          # one short call per model (~$0.05)
 uv run python -m src.benchmark check-retrieval
 uv run python -m src.benchmark score-runs --dry-run   # then without --dry-run (~$0.60)
@@ -120,3 +121,4 @@ uv run python -m src.benchmark sample --model haiku   # one query end to end
 - Phase 1 and Phase 2 change both the models and the thinking level, so differences between phases are not a pure capability effect.
 - Provider thinking levels are not directly equivalent.
 - Difficulty is measured on GPT-5 and o3, a proxy for how hard tasks are for our models.
+- The only hosted Qwen3-32B judge is fp8. It scores the published runs 3.5–5.5 points below the leaderboard, mostly by rejecting answers that differ only in formatting, so every "incorrect" verdict on our runs is checked by hand.

@@ -5,6 +5,7 @@ texttron/BrowseComp-Plus (MIT License, Copyright (c) 2025 texttron).
 
 CLI (run from the repo root):
     python -m src.benchmark download          # queries, answers, qrels, published runs -> data/
+    python -m src.benchmark download-index    # Qwen3-Embedding-8B corpus index + corpus text (~3.4 GB)
     python -m src.benchmark check-retrieval   # recall@5 on 100 questions vs published value
     python -m src.benchmark score-runs [--dry-run]   # judge the 4 published runs
     python -m src.benchmark candidates        # write configs/task_screening.yaml
@@ -22,12 +23,12 @@ import csv
 import hashlib
 import json
 import os
+import pickle
 import random
 import re
 import threading
 import time
 import urllib.request
-from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypedDict
@@ -136,6 +137,55 @@ def download_runs(cfg: dict) -> None:
     _update_manifest({"runs": {"repo": repo, "revision": revision, "files": list(cfg["published_runs"])}})
 
 
+class _ArrayUnpickler(pickle.Unpickler):
+    """Unpickles only numpy arrays and plain containers: a pickle can otherwise run arbitrary code."""
+    ALLOWED = {("numpy", "ndarray"), ("numpy", "dtype"),
+               ("numpy.core.multiarray", "_reconstruct"), ("numpy._core.multiarray", "_reconstruct")}
+
+    def find_class(self, module: str, name: str):
+        if (module, name) in self.ALLOWED:
+            return super().find_class(module, name)
+        raise pickle.UnpicklingError(f"blocked global in index pickle: {module}.{name}")
+
+
+def download_index(cfg: dict) -> dict:
+    """Official Qwen3-Embedding-8B corpus embeddings (-> data/index/*.npy) and corpus text (-> data/corpus/)."""
+    import numpy as np
+    from huggingface_hub import HfApi, hf_hub_download
+
+    rc = cfg["retrieval"]
+    api = HfApi()
+    raw = DATA / "raw"
+    idir = DATA / "index"
+    idir.mkdir(parents=True, exist_ok=True)
+    revision = api.dataset_info(rc["index_repo"]).sha
+    n = rc["index_shards"]
+    reps, lookup = [], []
+    for i in range(1, n + 1):
+        name = f"{rc['index_dir']}/corpus.shard{i}_of_{n}.pkl"
+        local = Path(hf_hub_download(rc["index_repo"], name, repo_type="dataset", revision=revision, local_dir=raw))
+        with local.open("rb") as f:
+            r, ids = _ArrayUnpickler(f).load()
+        reps.append(np.asarray(r, dtype=np.float32))
+        lookup += [str(x) for x in ids]
+        local.unlink()
+    emb = np.concatenate(reps)
+    np.save(idir / "embeddings.npy", emb)
+    (idir / "docids.json").write_text(json.dumps(lookup))
+
+    corpus_rev = api.dataset_info(rc["corpus_repo"]).sha
+    files = [s.rfilename for s in api.dataset_info(rc["corpus_repo"]).siblings if s.rfilename.endswith(".parquet")]
+    for name in files:
+        hf_hub_download(rc["corpus_repo"], name, repo_type="dataset", revision=corpus_rev, local_dir=raw)
+        (DATA / "corpus").mkdir(exist_ok=True)
+        (raw / name).replace(DATA / "corpus" / Path(name).name)
+    info = {"index": {"repo": rc["index_repo"], "revision": revision, "dir": rc["index_dir"],
+                      "shape": list(emb.shape)},
+            "corpus": {"repo": rc["corpus_repo"], "revision": corpus_rev, "files": files}}
+    _update_manifest(info)
+    return info
+
+
 def _decrypt_result(result: list) -> list:
     out = []
     for obj in result:
@@ -183,7 +233,7 @@ class TaskRecord:
 
 def load_qrels(name: str) -> dict[str, list[str]]:
     qrels: dict[str, list[str]] = {}
-    for line in (DATA / "qrels" / name).read_text().splitlines():
+    for line in (DATA / "qrels" / name).read_text().split("\n"):
         parts = line.split()
         if len(parts) >= 4 and int(parts[3]) > 0:
             qrels.setdefault(parts[0], []).append(parts[2])
@@ -194,7 +244,9 @@ def load_tasks() -> dict[str, TaskRecord]:
     evidence = load_qrels("qrel_evidence.txt")
     gold = load_qrels("qrel_golds.txt")
     tasks = {}
-    for line in (DATA / "queries.jsonl").read_text(encoding="utf-8").splitlines():
+    for line in (DATA / "queries.jsonl").read_text(encoding="utf-8").split("\n"):
+        if not line.strip():
+            continue
         r = json.loads(line)
         qid = r["query_id"]
         tasks[qid] = TaskRecord(qid, r["question"], r["answer"], evidence.get(qid, []), gold.get(qid, []))
@@ -241,66 +293,82 @@ class Backend:
         pass
 
 
-class NetMindBackend(Backend):
-    """Hosted Qwen3-Embedding-8B index linked from the BrowseComp-Plus repo (MCP over SSE)."""
-    name = "netmind-qwen3-embedding-8b"
-    index_version = "netmind-hosted"
+class DenseBackend(Backend):
+    """Official Qwen3-Embedding-8B corpus index, searched locally by inner product (as FAISS flat IP).
 
-    def __init__(self, url: str):
-        from anyio.from_thread import start_blocking_portal
-        from mcp import ClientSession
-        from mcp.client.sse import sse_client
+    Only the query is embedded remotely, through a hosted Qwen3-Embedding-8B endpoint, with the
+    official task prefix and L2 normalization (the official searcher runs with --normalize).
+    """
+    name = "qwen3-embedding-8b"
 
-        self._stack = ExitStack()
-        self._portal = self._stack.enter_context(start_blocking_portal())
-        read, write = self._stack.enter_context(self._portal.wrap_async_context_manager(sse_client(url)))
-        self._session = self._stack.enter_context(
-            self._portal.wrap_async_context_manager(ClientSession(read, write))
-        )
-        self._portal.call(self._session.initialize)
-        tools = self._portal.call(self._session.list_tools)
-        self.tool_names = sorted(t.name for t in tools.tools)
-        self._lock = threading.Lock()
+    def __init__(self, cfg: dict, embed_fn=None, data_dir: Path = DATA):
+        import numpy as np
 
-    def _call(self, tool: str, args: dict) -> Any:
-        with self._lock:
-            res = self._portal.call(self._session.call_tool, tool, args)
-        if getattr(res, "isError", False):
-            raise RuntimeError(f"NetMind {tool} error: {res.content}")
-        structured = getattr(res, "structuredContent", None)
-        if structured is not None:
-            return structured.get("result", structured)
-        items = []
-        for block in res.content:
-            parsed = json.loads(block.text)
-            items.extend(parsed if isinstance(parsed, list) else [parsed])
-        return items
+        rc = cfg["retrieval"]
+        self.ecfg = rc["query_embedding"]
+        self.emb = np.load(data_dir / "index" / "embeddings.npy")
+        self.docids = json.loads((data_dir / "index" / "docids.json").read_text())
+        self.docs = load_corpus(data_dir)
+        manifest = json.loads((data_dir / "manifest.json").read_text())
+        pin = self.ecfg.get("pin_provider") or "any"
+        self.index_version = f"{manifest['index']['revision'][:12]}:{self.ecfg['model']}@{pin}"
+        self._embed_fn = embed_fn or self._embed_api
+        self._client = None
+        self.last_usage: dict | None = None
+
+    def _embed_api(self, text: str) -> tuple[list[float], int]:
+        from openai import OpenAI
+
+        if self._client is None:
+            self._client = OpenAI(base_url=self.ecfg["base_url"], max_retries=3,
+                                  api_key=os.environ[self.ecfg["api_key_env"]])
+        extra = {}
+        if self.ecfg.get("pin_provider"):
+            extra["provider"] = {"order": [self.ecfg["pin_provider"]], "allow_fallbacks": False}
+        resp = self._client.embeddings.create(model=self.ecfg["model"], input=[text], extra_body=extra)
+        return resp.data[0].embedding, (resp.usage.prompt_tokens if resp.usage else 0)
+
+    def embed_query(self, query: str):
+        import numpy as np
+
+        vec, tokens = self._embed_fn(self.ecfg["task_prefix"] + query)
+        v = np.asarray(vec, dtype=np.float32)
+        if v.shape != (self.emb.shape[1],):
+            raise ValueError(f"query embedding has shape {v.shape}, index expects ({self.emb.shape[1]},)")
+        cost = tokens * self.ecfg["price_per_m_tokens"] / 1e6
+        self.last_usage = {"embedding_tokens": tokens, "embedding_cost_usd": round(cost, 8)}
+        return v / np.linalg.norm(v)
 
     def search(self, query: str, k: int) -> list[dict]:
-        hits = self._call("search", {"query": query})
-        return [{"docid": str(h["docid"]), "score": h.get("score"), "text": h.get("snippet", h.get("text", ""))}
-                for h in hits][:k]
+        import numpy as np
+
+        scores = self.emb @ self.embed_query(query)
+        top = np.argpartition(-scores, k)[:k]
+        top = top[np.argsort(-scores[top], kind="stable")]
+        return [{"docid": self.docids[i], "score": float(scores[i]), "text": self.docs.get(self.docids[i], "")}
+                for i in top]
 
     def get_document(self, docid: str) -> str | None:
-        doc = self._call("get_document", {"docid": docid})
-        if isinstance(doc, list):
-            doc = doc[0] if doc else None
-        return None if not doc else doc.get("text")
+        return self.docs.get(docid)
 
-    def close(self) -> None:
-        self._stack.close()
+
+def load_corpus(data_dir: Path = DATA) -> dict[str, str]:
+    import pyarrow.parquet as pq
+
+    docs: dict[str, str] = {}
+    for path in sorted((data_dir / "corpus").glob("*.parquet")):
+        table = pq.read_table(path, columns=["docid", "text"])
+        docs.update(zip(map(str, table["docid"].to_pylist()), table["text"].to_pylist()))
+    if not docs:
+        raise FileNotFoundError("no corpus in data/corpus; run: python -m src.benchmark download-index")
+    return docs
 
 
 def make_backend(cfg: dict) -> Backend:
     rcfg = cfg["retrieval"]
-    if rcfg["backend"] == "netmind":
-        token = os.environ.get("NETMIND_TOKEN")
-        if not token:
-            raise RuntimeError("NETMIND_TOKEN is not set (see .env.example)")
-        return NetMindBackend(rcfg["netmind_url"].format(token=token))
-    raise NotImplementedError(
-        f"backend {rcfg['backend']!r}: local BM25 is the fallback in spec 01 and is added only if NetMind fails"
-    )
+    if rcfg["backend"] == "qwen3-embedding-8b":
+        return DenseBackend(cfg)
+    raise NotImplementedError(f"backend {rcfg['backend']!r}: local BM25 is the fallback and is not built")
 
 
 class Retriever:
@@ -345,7 +413,8 @@ class Retriever:
                 hits.append({"rank": rank, "docid": h["docid"], "score": h.get("score"),
                              "snippet": snippet, "snippet_tokens": n})
             return {"backend": self.backend_name, "index_version": self.index_version,
-                    "query": query, "k": self.rcfg["k"], "hits": hits}
+                    "query": query, "k": self.rcfg["k"], "hits": hits,
+                    "usage": getattr(self.backend, "last_usage", None)}
         return self._cached("search", query, compute)
 
     def get_document(self, docid: str) -> dict:
@@ -526,7 +595,9 @@ class Judge:
 def published_run_responses(path: Path) -> dict[str, str | None]:
     """query_id -> final response text, or None if the run did not complete (counted incorrect)."""
     out = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8").split("\n"):  # not splitlines(): U+2028 occurs inside JSON strings
+        if not line.strip():
+            continue
         row = json.loads(line)
         result = row.get("result") or []
         response = None
@@ -714,6 +785,7 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="python -m src.benchmark")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("download")
+    sub.add_parser("download-index")
     sub.add_parser("check-retrieval")
     sr = sub.add_parser("score-runs")
     sr.add_argument("--dry-run", action="store_true")
@@ -731,6 +803,8 @@ def main(argv: list[str] | None = None) -> None:
         download_qrels(cfg)
         download_runs(cfg)
         print("qrels and published runs downloaded; see data/manifest.json")
+    elif args.cmd == "download-index":
+        print(json.dumps(download_index(cfg), indent=2))
     elif args.cmd == "check-retrieval":
         print(json.dumps(check_retrieval(cfg), indent=2))
     elif args.cmd == "score-runs":
@@ -740,6 +814,18 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "show":
         t = load_tasks()[args.query_id]
         print(f"Q: {t.question}\n\nA: {t.answer}\n\nevidence: {len(t.evidence_docids)}  gold: {len(t.gold_docids)}")
+        # The hosted judge is fp8 and strict about formatting: show its verdicts so misjudged tasks can be caught.
+        judge = Judge(cfg)
+        print("\npublished runs (judge verdict | extracted answer):")
+        for name in cfg["published_runs"]:
+            resp = published_run_responses(DATA / "runs" / name.replace("/", "__")).get(t.query_id)
+            path = judge.cache_path(t.query_id, resp) if resp else None
+            if path is None or not path.exists():
+                print(f"  {name:28s} {'not completed' if resp is None else 'not judged'}")
+                continue
+            j = json.loads(path.read_text(encoding="utf-8"))
+            verdict = {True: "correct", False: "incorrect"}.get(j["correct"], "parse error")
+            print(f"  {name:28s} {verdict:9s} | {j.get('extracted_final_answer')}")
     elif args.cmd == "finalize":
         print(json.dumps(write_tasks(cfg), indent=2))
     elif args.cmd == "sample":
