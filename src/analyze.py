@@ -103,6 +103,22 @@ def load_runs(results: Path = RESULTS, tasks: dict | None = None, phases=STUDY,
     return sorted(runs, key=lambda r: r["run_id"])
 
 
+def load_pefix(results: Path = RESULTS, tasks: dict | None = None) -> list[dict]:
+    """Plan-and-Execute fix reruns, re-tagged with their model's phase so they can replace the originals."""
+    model_phase = {m: p for p in STUDY for m in yaml.safe_load((bm.CONFIGS / "models.yaml").read_text())[p]}
+    runs = load_runs(results, tasks, phases=("pefix",))
+    for r in runs:
+        r["phase"], r["variant"] = model_phase[r["model"]], "pefix"
+    return runs
+
+
+def with_pefix(runs: list[dict], fix: list[dict]) -> list[dict]:
+    """Replace each original run by its fix rerun (same phase, task, agent, model)."""
+    key = lambda r: (r["phase"], r["task_id"], r["agent"], r["model"])
+    swap = {key(r): r for r in fix}
+    return [swap.get(key(r), r) for r in runs]
+
+
 def failed(runs: list[dict]) -> list[dict]:
     return [r for r in runs if not r["correct"]]
 
@@ -602,6 +618,33 @@ def build(results: Path = RESULTS, tasks: dict | None = None, draft: bool = Fals
                     "kappa": f"{ids_p}/{len(ids)}" if ids else None})
     _write_csv(out / "agreement.csv", kap, ["comparison", "label", "runs", "kappa"])
 
+    # sensitivity: Plan-and-Execute fix reruns replace the Luna and Terra Plan-and-Execute runs
+    fix = load_pefix(results, tasks) if (results / "pefix" / "judgments.jsonl").exists() else []
+    sens, fix_acc = [], []
+    if fix:
+        fixed_runs = with_pefix(runs, fix)
+        fix_labels = {r["run_id"]: reviewed.get(r["run_id"]) or (pre.get(r["run_id"]) if draft else None)
+                      for r in failed(fixed_runs)}
+        fixed_labeled = [{**r, **fix_labels[r["run_id"]]} for r in failed(fixed_runs) if fix_labels.get(r["run_id"])]
+        missing = len(failed(fixed_runs)) - len(fixed_labeled)
+        for p in STUDY:
+            ps = [x for x in fixed_labeled if x["phase"] == p]
+            for s_ in similarity(ps, n_perm=n_perm):
+                sens.append({"phase": p, "exposure": "all", **s_})
+            for s_ in similarity(ps, strata_key=lambda x: x["exposure"]["level"], n_perm=n_perm):
+                sens.append({"phase": p, "exposure": "same level", **s_})
+        _write_csv(out / "similarity_pefix.csv", sens, list(sens[0]))
+        orig = {(r["task_id"], r["model"]): r for r in runs if r["agent"] == "plan_execute"}
+        fix_acc = [{"model": m, "original_correct": sum(orig[(r["task_id"], m)]["correct"] for r in fix if r["model"] == m),
+                    "fixed_correct": sum(r["correct"] for r in fix if r["model"] == m),
+                    "runs": sum(r["model"] == m for r in fix),
+                    "fixed_searched_at_all": sum(any(e["type"] == "search" for e in r["events"]) for r in fix if r["model"] == m)}
+                   for m in sorted({r["model"] for r in fix})]
+        if missing:
+            sens_note = f"{missing} failed fix reruns have no labels yet and are left out."
+        else:
+            sens_note = ""
+
     phases = phase_table(runs, labels)
     _write_csv(out / "phase1_vs_phase2.csv", phases, list(phases[0]) if phases else ["task_id"])
     evid = evidence_results(results)
@@ -668,6 +711,11 @@ def build(results: Path = RESULTS, tasks: dict | None = None, draft: bool = Fals
         "Failed E0/E1 runs rerun once with up to "
         f"{ag.load_budget().get('evidence_max_context_docs', 3)} gold documents in the first prompt.", "",
         _md_table(evid) if evid else "_not run yet_\n",
+        "## Sensitivity: Plan-and-Execute fix", "",
+        ("The Luna and Terra Plan-and-Execute runs rerun with one added sentence saying the search tools are available "
+         "during execution (`pefix` phase); the tables replace the original runs with these." + (" " + sens_note if fix and sens_note else ""))
+        if fix else "_not run yet_", "",
+        _md_table(fix_acc) if fix else "", _md_table(sens) if fix else "",
         "## Example cases", "", "Trace outlines show event numbers and evidence documents only.", "",
         *ex_md,
     ]
@@ -693,7 +741,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.cmd == "all":
         print(json.dumps(build(tasks=tasks, draft=args.draft), indent=2))
         return
-    runs = load_runs(tasks=tasks)
+    runs = load_runs(tasks=tasks) + load_pefix(tasks=tasks)
     if args.cmd == "prelabel-inputs":
         print(f"{len(write_prelabel_inputs(runs, tasks))} condensed traces -> {REVIEW / 'inputs'}")
     elif args.cmd == "add-labels":
