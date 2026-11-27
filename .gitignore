@@ -17,3 +17,5 @@ results/debug/
 __pycache__/
 *.pyc
 .pytest_cache/
+results/review/inputs/
+results/review/runs/

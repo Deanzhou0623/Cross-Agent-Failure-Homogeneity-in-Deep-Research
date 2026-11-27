@@ -168,3 +168,13 @@ def test_runner_waits_for_in_flight_runs_instead_of_stopping(tmp_path):
     runner = make_runner(tmp_path, [{"text": FINAL}], budget=b, cost_per_call=0.05)
     out = runner.run_all(workers=3)
     assert out["states"] == {"done": 4} and out["stop_reason"] is None
+
+
+def test_evidence_phase_puts_gold_docs_into_the_prompt(tmp_path, monkeypatch):
+    spec = rn.RunSpec("evidence", "t1", "react", "mockm")
+    b = {"caps_usd": {**ag.load_budget()["caps_usd"]}}
+    runner = make_runner(tmp_path, [{"text": FINAL}], budget=b, specs=[spec])
+    assert runner.run_all()["states"] == {"done": 1}
+    events = ag.read_trace(rn.done_trace(spec, tmp_path / "results"))
+    assert events[0]["meta"]["context_docids"] == ["101"]          # the task's gold doc
+    assert [e["docids"] for e in events if e["type"] == "context"] == [["101"]]

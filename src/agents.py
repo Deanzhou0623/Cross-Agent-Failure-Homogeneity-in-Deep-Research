@@ -83,6 +83,8 @@ STRATEGIES = {
         "gap. When no gaps remain, give the final answer in the required format instead of calling a tool."
     ),
 }
+# Controlled-evidence check (spec 04, item 14): documents put into the first prompt
+CONTEXT_INTRO = "Documents from the corpus that may help (you can still search and open others):"
 PLAN_FIRST = "Before using any tools, write your plan as JSON only."
 EXECUTE_STEP = "Execute step {step}: {goal}"
 REPLAN = "Replan: {reason}.\nFindings so far:\n{findings}\nWrite a revised plan as JSON only, covering what is still needed."
@@ -151,6 +153,7 @@ REQUIRED = {
     "plan": {"version"},
     "ledger": {"facts", "gaps"},
     "budget": {"limit"},
+    "context": {"docids", "docs"},
     "final_answer": {"raw", "explanation", "exact_answer", "confidence", "cited_docids", "forced"},
     "error": {"kind", "message", "retry"},
     "run_end": {"status", "totals", "retrieved_docids", "read_docids"},
@@ -257,7 +260,8 @@ class RunError(Exception):
 
 class Run:
     def __init__(self, *, run_id: str, phase: str, agent: str, task: dict, mcfg: dict, retriever,
-                 trace_path: Path, budget: dict | None = None, meta: dict | None = None):
+                 trace_path: Path, budget: dict | None = None, meta: dict | None = None,
+                 context_docs: list[dict] | None = None):
         self.b = budget or load_budget()
         self.run_id, self.phase, self.agent, self.task = run_id, phase, agent, task
         self.mcfg = {**mcfg, "max_output_tokens": self.b["max_output_tokens"]}
@@ -274,6 +278,7 @@ class Run:
         self.status: str | None = None
         self.error: dict | None = None
         self.meta = meta or {}
+        self.context_docs = context_docs or []
 
     # -- lifecycle ----------------------------------------------------------- #
     def start(self) -> None:
@@ -285,6 +290,8 @@ class Run:
                        budget={**self.b, "cost_cap_usd": self.cost_cap}, git_commit=_git_commit(),
                        retriever={"backend": r.backend_name, "index_version": r.index_version, **r.rcfg},
                        system_prompt=self.system, query_template=QUERY_TEMPLATE, tools=TOOLS, meta=self.meta)
+        if self.context_docs:
+            self.trace.log("context", docids=[d["docid"] for d in self.context_docs], docs=self.context_docs)
 
     @property
     def cost_cap(self) -> float:
@@ -296,7 +303,11 @@ class Run:
         return models.open_conversation(self.mcfg, system=self.system)
 
     def prompt(self) -> str:
-        return QUERY_TEMPLATE.format(Question=self.task["question"])
+        text = QUERY_TEMPLATE.format(Question=self.task["question"])
+        if self.context_docs:
+            docs = "\n\n".join(_read_output(d["docid"], True, d["text"]) for d in self.context_docs)
+            text += f"\n\n{CONTEXT_INTRO}\n\n{docs}"
+        return text
 
     def end(self) -> dict:
         totals = {"model_calls": self.n_model, "tool_calls": self.n_tools, "search": self.n_search,
@@ -546,12 +557,18 @@ AGENTS: dict[str, Callable[[Run], None]] = {"react": react, "plan_execute": plan
 
 
 def run_agent(agent: str, task: dict, mcfg: dict, retriever, trace_path: Path, *, run_id: str,
-              phase: str, budget: dict | None = None, meta: dict | None = None) -> dict:
-    """Run one agent on one task. task is a TaskView: {query_id, question} only."""
+              phase: str, budget: dict | None = None, meta: dict | None = None,
+              context_docids: list[str] | None = None) -> dict:
+    """Run one agent on one task. task is a TaskView: {query_id, question} only.
+
+    context_docids: only for the controlled-evidence check; these documents go into the first prompt.
+    """
     if set(task) != {"query_id", "question"}:
         raise ValueError("agents receive only {query_id, question}")
+    docs = [retriever.get_document(d) for d in context_docids or []]
+    docs = [{"docid": d["docid"], "text": d["text"], "truncated": d["truncated"]} for d in docs if d["found"]]
     run = Run(run_id=run_id, phase=phase, agent=agent, task=task, mcfg=mcfg, retriever=retriever,
-              trace_path=trace_path, budget=budget, meta=meta)
+              trace_path=trace_path, budget=budget, meta=meta, context_docs=docs)
     run.start()
     try:
         AGENTS[agent](run)

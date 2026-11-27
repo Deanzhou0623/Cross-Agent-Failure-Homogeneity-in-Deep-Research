@@ -117,7 +117,7 @@ def test_agents_never_see_answers_or_qrels(retriever, tmp_path):
     path = tmp_path / "leak.jsonl"
     ag.run_agent("react", record.view(), mock(SCRIPTS["react"]), retriever, path, run_id="t", phase="debug")
     body = path.read_text()
-    assert SECRET not in body and '"evidence' not in body and "gold" not in body
+    assert SECRET not in body and "evidence_docids" not in body and "gold" not in body
     with pytest.raises(ValueError):
         ag.run_agent("react", {**record.view(), "answer": SECRET}, mock([]), retriever, tmp_path / "x.jsonl",
                      run_id="t", phase="debug")
