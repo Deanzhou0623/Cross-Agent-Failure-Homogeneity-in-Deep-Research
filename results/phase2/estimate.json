@@ -1,0 +1,21 @@
+{
+  "runs": 45,
+  "estimated_usd": 5.3,
+  "by_model": {
+    "sonnet": {
+      "runs": 15,
+      "usd_per_run": 0.164,
+      "source": "smoke"
+    },
+    "terra": {
+      "runs": 15,
+      "usd_per_run": 0.0514,
+      "source": "smoke"
+    },
+    "flash": {
+      "runs": 15,
+      "usd_per_run": 0.1377,
+      "source": "smoke"
+    }
+  }
+}

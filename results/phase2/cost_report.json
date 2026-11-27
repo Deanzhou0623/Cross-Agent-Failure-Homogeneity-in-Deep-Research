@@ -1,0 +1,26 @@
+{
+  "actual_usd": 6.2901,
+  "by_model": {
+    "flash": {
+      "actual_usd": 2.0752,
+      "actual_usd_per_run": 0.1383,
+      "estimated_usd_per_run": 0.1377,
+      "runs": 15
+    },
+    "sonnet": {
+      "actual_usd": 3.3151,
+      "actual_usd_per_run": 0.221,
+      "estimated_usd_per_run": 0.164,
+      "runs": 15
+    },
+    "terra": {
+      "actual_usd": 0.8997,
+      "actual_usd_per_run": 0.06,
+      "estimated_usd_per_run": 0.0514,
+      "runs": 15
+    }
+  },
+  "correct": 30,
+  "estimated_usd": 5.3,
+  "runs": 45
+}

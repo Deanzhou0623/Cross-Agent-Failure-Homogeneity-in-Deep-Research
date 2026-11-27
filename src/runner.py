@@ -217,8 +217,9 @@ def git_dirty(paths=("src", "configs")) -> bool:
 class Runner:
     def __init__(self, specs: list[RunSpec], *, budget: dict | None = None, results: Path = RESULTS,
                  tasks: dict | None = None, load_model=models.load_model, make_retriever=None,
-                 judge_cache: Path | None = bm.DATA / "cache" / "judge", log=print):
+                 judge_cache: Path | None = bm.DATA / "cache" / "judge", log=print, retry_missing: bool = False):
         self.specs, self.results, self.log = specs, results, log
+        self.retry_missing = retry_missing   # give "missing" runs a fresh set of attempts (e.g. after a billing outage)
         self.budget = budget or ag.load_budget()
         self.tasks = tasks if tasks is not None else bm.load_tasks()
         self.load_model = load_model
@@ -255,7 +256,9 @@ class Runner:
     def run_one(self, spec: RunSpec) -> str:
         max_attempts = self.budget["max_attempts"]
         state = run_state(spec, max_attempts, self.results)
-        if state != "todo":
+        if state == "missing" and self.retry_missing:
+            max_attempts += len(attempts(spec, self.results))     # earlier attempts stay on disk, numbering continues
+        elif state != "todo":
             return state
         mcfg = self.load_model(spec.model)
         task = self.tasks[spec.task_id].view()
@@ -460,6 +463,7 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--confirm-cost", type=float, help="non-interactive confirmation: the estimated cost")
     r.add_argument("--only", help="AGENT/MODEL/TASK, each part may be *")
     r.add_argument("--workers", type=int, default=1)
+    r.add_argument("--retry-missing", action="store_true", help="retry runs that used up their attempts")
     for name in ("judge", "summarize", "pack", "unpack", "verify"):
         sub.add_parser(name).add_argument("--phase", required=True, choices=sorted(PHASES))
     args = ap.parse_args(argv)
@@ -469,7 +473,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.cmd == "run":
         budget = ag.load_budget()
         specs = select(plan_runs(phase), args.only)
-        todo = [s for s in specs if run_state(s, budget["max_attempts"]) == "todo"]
+        retry = {"todo", "missing"} if args.retry_missing else {"todo"}
+        todo = [s for s in specs if run_state(s, budget["max_attempts"]) in retry]
         est = estimate(todo, budget)
         states = {}
         for s in specs:
@@ -491,7 +496,7 @@ def main(argv: list[str] | None = None) -> None:
         est_path = RESULTS / phase / "estimate.json"
         if not est_path.exists():
             est_path.write_text(json.dumps(est, indent=2) + "\n")
-        print(json.dumps(Runner(todo).run_all(args.workers), indent=2))
+        print(json.dumps(Runner(todo, retry_missing=args.retry_missing).run_all(args.workers), indent=2))
     elif args.cmd == "judge":
         rows = judge_phase(phase)
         print(f"{sum(r['correct'] for r in rows)}/{len(rows)} correct -> results/{phase}/judgments.jsonl")
