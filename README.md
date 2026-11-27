@@ -89,6 +89,7 @@ uv run python -m src.benchmark score-runs --dry-run   # then without --dry-run (
 uv run python -m src.benchmark candidates  # then screen configs/task_screening.yaml by hand
 uv run python -m src.benchmark finalize    # writes configs/tasks.yaml
 uv run python -m src.benchmark sample --model haiku   # one query end to end
+uv run python -m src.agents try --agent react --model haiku   # one agent run on a non-study task
 ```
 
 ## Project structure

@@ -103,14 +103,26 @@ class Conversation:
     def add_user(self, text: str) -> None:
         raise NotImplementedError
 
-    def add_tool_results(self, results: list[tuple[str, str, str]]) -> None:
+    def add_tool_results(self, results: list[tuple[str, str, str]], text: str | None = None) -> None:
+        """Append tool outputs (call_id, name, output), plus an optional user text in the same turn."""
         raise NotImplementedError
 
-    def step(self, tools: list[dict]) -> Response:
+    def step(self, tools: list[dict], tool_choice: str = "auto") -> Response:
+        """One model call. tool_choice="none" keeps the tools defined but forbids calling them."""
         raise NotImplementedError
 
     def native_history(self) -> list:
         raise NotImplementedError
+
+    def _store(self) -> list:
+        raise NotImplementedError
+
+    def mark(self) -> int:
+        return len(self._store())
+
+    def rollback(self, mark: int) -> None:
+        """Drop everything appended after mark (used to retry a degenerate call)."""
+        del self._store()[mark:]
 
 
 # --------------------------------------------------------------------------- #
@@ -130,11 +142,13 @@ class AnthropicConversation(Conversation):
     def add_user(self, text: str) -> None:
         self.messages.append({"role": "user", "content": text})
 
-    def add_tool_results(self, results):
-        self.messages.append({"role": "user", "content": [
-            {"type": "tool_result", "tool_use_id": cid, "content": out} for cid, _, out in results]})
+    def add_tool_results(self, results, text=None):
+        content = [{"type": "tool_result", "tool_use_id": cid, "content": out} for cid, _, out in results]
+        if text:
+            content.append({"type": "text", "text": text})
+        self.messages.append({"role": "user", "content": content})
 
-    def step(self, tools):
+    def step(self, tools, tool_choice="auto"):
         request = {
             "model": self.model_id,
             "max_tokens": self.mcfg["max_output_tokens"],
@@ -147,6 +161,8 @@ class AnthropicConversation(Conversation):
         if tools:
             params["tools"] = [{"name": t["name"], "description": t["description"],
                                 "input_schema": t["parameters"]} for t in tools]
+            if tool_choice == "none":
+                params["tool_choice"] = request["tool_choice"] = {"type": "none"}
         t0 = time.monotonic()
 
         def call():
@@ -170,6 +186,9 @@ class AnthropicConversation(Conversation):
     def native_history(self):
         return self.messages
 
+    def _store(self):
+        return self.messages
+
 
 # --------------------------------------------------------------------------- #
 # OpenAI (Responses API)
@@ -189,11 +208,13 @@ class OpenAIConversation(Conversation):
     def add_user(self, text):
         self.items.append({"role": "user", "content": text})
 
-    def add_tool_results(self, results):
+    def add_tool_results(self, results, text=None):
         for cid, _, out in results:
             self.items.append({"type": "function_call_output", "call_id": cid, "output": out})
+        if text:
+            self.items.append({"role": "user", "content": text})
 
-    def step(self, tools):
+    def step(self, tools, tool_choice="auto"):
         request = {
             "model": self.model_id,
             "reasoning": {"effort": self.mcfg["reasoning"]["effort"], "summary": "auto"},
@@ -206,6 +227,8 @@ class OpenAIConversation(Conversation):
         if tools:
             params["tools"] = [{"type": "function", "name": t["name"], "description": t["description"],
                                 "parameters": t["parameters"], "strict": False} for t in tools]
+            if tool_choice == "none":
+                params["tool_choice"] = request["tool_choice"] = "none"
         t0 = time.monotonic()
         resp, attempts = _retry(lambda: self.client.responses.create(**params))
         latency = (time.monotonic() - t0) * 1000
@@ -228,6 +251,9 @@ class OpenAIConversation(Conversation):
     def native_history(self):
         return self.items
 
+    def _store(self):
+        return self.items
+
 
 # --------------------------------------------------------------------------- #
 # Gemini
@@ -248,15 +274,17 @@ class GeminiConversation(Conversation):
 
         self.contents.append(types.Content(role="user", parts=[types.Part(text=text)]))
 
-    def add_tool_results(self, results):
+    def add_tool_results(self, results, text=None):
         from google.genai import types
 
-        self.contents.append(types.Content(role="user", parts=[
-            types.Part(function_response=types.FunctionResponse(id=cid or None, name=name,
-                                                                response={"result": out}))
-            for cid, name, out in results]))
+        parts = [types.Part(function_response=types.FunctionResponse(id=cid or None, name=name,
+                                                                     response={"result": out}))
+                 for cid, name, out in results]
+        if text:
+            parts.append(types.Part(text=text))
+        self.contents.append(types.Content(role="user", parts=parts))
 
-    def step(self, tools):
+    def step(self, tools, tool_choice="auto"):
         from google.genai import types
 
         request = {
@@ -274,7 +302,11 @@ class GeminiConversation(Conversation):
                 types.FunctionDeclaration(name=t["name"], description=t["description"],
                                           parameters_json_schema=t["parameters"]) for t in tools])]
             if tools else None,
+            tool_config=types.ToolConfig(function_calling_config=types.FunctionCallingConfig(mode="NONE"))
+            if tools and tool_choice == "none" else None,
         )
+        if tools and tool_choice == "none":
+            request["tool_choice"] = "none"
         t0 = time.monotonic()
         resp, attempts = _retry(lambda: self.client.models.generate_content(
             model=self.model_id, contents=self.contents, config=config))
@@ -298,13 +330,20 @@ class GeminiConversation(Conversation):
     def native_history(self):
         return [c.model_dump(exclude_none=True, mode="json") for c in self.contents]
 
+    def _store(self):
+        return self.contents
+
 
 # --------------------------------------------------------------------------- #
 # Mock (tests and development; never calls an API)
 # --------------------------------------------------------------------------- #
 
 class MockConversation(Conversation):
-    """Replays mcfg['script']: a list of steps, each {"tool_calls": [[name, args], ...]} or {"text": "..."}."""
+    """Replays mcfg['script']: a list of steps, each with "tool_calls": [[name, args], ...] and/or "text".
+
+    Optional per step: "stop_reason", "served_model", "output_tokens", "reasoning_summary".
+    A step whose tool calls arrive while tool_choice="none" has its calls dropped, as a real API would.
+    """
     provider = "mock"
 
     def __init__(self, mcfg: dict, system: str):
@@ -316,20 +355,28 @@ class MockConversation(Conversation):
     def add_user(self, text):
         self.history.append({"role": "user", "content": text})
 
-    def add_tool_results(self, results):
+    def add_tool_results(self, results, text=None):
         self.history.append({"role": "tool", "content": [{"id": c, "name": n, "output": o} for c, n, o in results]})
+        if text:
+            self.history.append({"role": "user", "content": text})
 
-    def step(self, tools):
+    def step(self, tools, tool_choice="auto"):
         step = self.script[min(self.n, len(self.script) - 1)]
         self.n += 1
-        calls = [ToolCall(f"mock_{self.n}_{i}", name, args) for i, (name, args) in enumerate(step.get("tool_calls", []))]
+        calls = [] if tool_choice == "none" else [
+            ToolCall(f"mock_{self.n}_{i}", name, args) for i, (name, args) in enumerate(step.get("tool_calls", []))]
         text = step.get("text", "")
         self.history.append({"role": "assistant", "content": text, "tool_calls": [c.__dict__ for c in calls]})
-        usage = {"input": 100, "cached_input": 0, "cache_write": 0, "output": 20, "reasoning": None}
-        return Response(text, calls, step.get("reasoning_summary"), usage, 0.0, 0.0,
-                        "tool_use" if calls else "end_turn", self.model_id, {"model": self.model_id})
+        usage = {"input": 100, "cached_input": 0, "cache_write": 0, "output": step.get("output_tokens", 20),
+                 "reasoning": None}
+        stop = step.get("stop_reason", "tool_use" if calls else "end_turn")
+        return Response(text, calls, step.get("reasoning_summary"), usage, 0.0, 0.0, stop,
+                        step.get("served_model", self.model_id), {"model": self.model_id, "tool_choice": tool_choice})
 
     def native_history(self):
+        return self.history
+
+    def _store(self):
         return self.history
 
 
