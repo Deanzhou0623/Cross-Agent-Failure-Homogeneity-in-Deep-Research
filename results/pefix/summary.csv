@@ -1,0 +1,16 @@
+run_id,phase,task_id,stratum,agent,model,model_id,state,status,correct,attempts,model_calls,tool_calls,search,get_document,retrieved_docs,read_docs,input_tokens,cached_input_tokens,cache_write_tokens,output_tokens,cost_usd,wall_seconds
+pefix-1111-plan_execute-luna,pefix,1111,hard,plan_execute,luna,gpt-6-luna,done,budget_exhausted,0,1,32,30,30,0,52,0,85087,1246440,0,6233,0.024102,326.6
+pefix-1233-plan_execute-luna,pefix,1233,hard,plan_execute,luna,gpt-6-luna,done,completed,0,1,1,0,0,0,0,0,519,0,0,5757,0.00293,46.1
+pefix-1233-plan_execute-terra,pefix,1233,hard,plan_execute,terra,gpt-6.1-terra,done,completed,1,1,14,16,13,3,25,3,46778,289083,0,1406,0.068267,62.9
+pefix-176-plan_execute-luna,pefix,176,hard,plan_execute,luna,gpt-6-luna,done,budget_exhausted,0,1,33,30,29,1,71,1,87745,1284778,0,11911,0.027589,438.8
+pefix-286-plan_execute-luna,pefix,286,hard,plan_execute,luna,gpt-6-luna,done,completed,0,1,1,0,0,0,0,0,556,0,0,1018,0.000565,7.0
+pefix-286-plan_execute-terra,pefix,286,hard,plan_execute,terra,gpt-6.1-terra,done,completed,1,1,1,0,0,0,0,0,556,0,0,1040,0.005756,26.9
+pefix-366-plan_execute-luna,pefix,366,hard,plan_execute,luna,gpt-6-luna,done,completed,0,1,1,0,0,0,0,0,527,0,0,2640,0.001373,19.6
+pefix-366-plan_execute-terra,pefix,366,hard,plan_execute,terra,gpt-6.1-terra,done,completed,1,1,16,29,27,2,51,2,81193,568397,0,3339,0.126319,122.2
+pefix-417-plan_execute-luna,pefix,417,moderate,plan_execute,luna,gpt-6-luna,done,budget_exhausted,0,1,11,30,27,3,59,3,79321,308032,0,2868,0.012456,304.3
+pefix-417-plan_execute-terra,pefix,417,moderate,plan_execute,terra,gpt-6.1-terra,done,completed,0,1,6,10,8,2,24,2,24669,43523,0,937,0.031533,30.0
+pefix-495-plan_execute-luna,pefix,495,hard,plan_execute,luna,gpt-6-luna,done,completed,1,1,37,28,25,3,44,1,85779,1567699,0,5539,0.027034,255.8
+pefix-580-plan_execute-luna,pefix,580,moderate,plan_execute,luna,gpt-6-luna,done,completed,1,1,8,10,7,3,26,3,18718,51555,0,2515,0.003648,108.0
+pefix-580-plan_execute-terra,pefix,580,moderate,plan_execute,terra,gpt-6.1-terra,done,completed,0,1,1,0,0,0,0,0,601,0,0,434,0.002771,12.4
+pefix-833-plan_execute-luna,pefix,833,moderate,plan_execute,luna,gpt-6-luna,done,completed,0,1,1,0,0,0,0,0,573,0,0,2843,0.001479,23.8
+pefix-915-plan_execute-luna,pefix,915,hard,plan_execute,luna,gpt-6-luna,done,budget_exhausted,1,1,24,30,23,7,40,7,78217,797557,0,9235,0.020423,285.4

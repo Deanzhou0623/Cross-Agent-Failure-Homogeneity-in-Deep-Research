@@ -1,0 +1,16 @@
+{
+  "runs": 15,
+  "estimated_usd": 0.35,
+  "by_model": {
+    "luna": {
+      "runs": 10,
+      "usd_per_run": 0.0098,
+      "source": "smoke"
+    },
+    "terra": {
+      "runs": 5,
+      "usd_per_run": 0.0514,
+      "source": "smoke"
+    }
+  }
+}

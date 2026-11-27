@@ -1,0 +1,36 @@
+{
+  "runs": 10,
+  "estimated_usd": 0.83,
+  "by_model": {
+    "flash": {
+      "runs": 1,
+      "usd_per_run": 0.1377,
+      "source": "smoke"
+    },
+    "flash_lite": {
+      "runs": 2,
+      "usd_per_run": 0.1001,
+      "source": "smoke"
+    },
+    "haiku": {
+      "runs": 2,
+      "usd_per_run": 0.0461,
+      "source": "smoke"
+    },
+    "luna": {
+      "runs": 2,
+      "usd_per_run": 0.0098,
+      "source": "smoke"
+    },
+    "sonnet": {
+      "runs": 2,
+      "usd_per_run": 0.164,
+      "source": "smoke"
+    },
+    "terra": {
+      "runs": 1,
+      "usd_per_run": 0.0514,
+      "source": "smoke"
+    }
+  }
+}

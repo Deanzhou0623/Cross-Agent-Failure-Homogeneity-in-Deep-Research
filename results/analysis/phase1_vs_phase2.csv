@@ -2,12 +2,12 @@ task_id,agent,phase1_failed,phase1_primary,phase2_failed,phase2_primary,outcome
 286,evidence_driven,1/3,evidence_selection ×1,0/3,—,disappears
 286,plan_execute,0/3,—,1/3,stopping ×1,no Phase 1 failure (new in Phase 2)
 286,react,1/3,evidence_selection ×1,0/3,—,disappears
-366,evidence_driven,2/3,query_formulation ×2,2/3,retrieval ×2,changes
+366,evidence_driven,2/3,query_formulation ×2,2/3,query_formulation ×1; retrieval ×1,persists
 366,plan_execute,3/3,query_formulation ×1; retrieval ×1; stopping ×1,2/3,retrieval ×1; stopping ×1,persists
-366,react,2/3,premature_commitment ×1; query_formulation ×1,1/3,query_formulation ×1,persists
-417,evidence_driven,2/3,verification ×2,1/3,verification ×1,persists
-417,plan_execute,2/3,stopping ×1; verification ×1,3/3,verification ×3,persists
-417,react,2/3,verification ×2,2/3,premature_commitment ×1; verification ×1,persists
+366,react,2/3,query_formulation ×2,1/3,query_formulation ×1,persists
+417,evidence_driven,2/3,reasoning ×1; verification ×1,1/3,reasoning ×1,persists
+417,plan_execute,2/3,stopping ×1; verification ×1,3/3,reasoning ×2; verification ×1,persists
+417,react,2/3,reasoning ×2,2/3,premature_commitment ×1; verification ×1,changes
 580,evidence_driven,0/3,—,0/3,—,no Phase 1 failure
 580,plan_execute,1/3,stopping ×1,0/3,—,disappears
 580,react,0/3,—,0/3,—,no Phase 1 failure

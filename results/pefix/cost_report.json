@@ -1,0 +1,20 @@
+{
+  "actual_usd": 0.3562,
+  "by_model": {
+    "luna": {
+      "actual_usd": 0.1216,
+      "actual_usd_per_run": 0.0122,
+      "estimated_usd_per_run": 0.0098,
+      "runs": 10
+    },
+    "terra": {
+      "actual_usd": 0.2346,
+      "actual_usd_per_run": 0.0469,
+      "estimated_usd_per_run": 0.0514,
+      "runs": 5
+    }
+  },
+  "correct": 6,
+  "estimated_usd": 0.35,
+  "runs": 15
+}

@@ -679,7 +679,9 @@ def build(results: Path = RESULTS, tasks: dict | None = None, draft: bool = Fals
 
     sim_all = [s for s in sims if s["exposure"] in ("all", "same level")]
     status = (f"**DRAFT:** {n_reviewed}/{len(fails)} failed runs have reviewed labels; the rest use pre-labels.\n"
-              if draft and n_reviewed < len(fails) else f"Labels: {len(labels)}/{len(fails)} failed runs reviewed.\n")
+              if draft and n_reviewed < len(fails) else
+              f"Labels: {len(labels)}/{len(fails)} failed runs reviewed (reviewer: "
+              f"{', '.join(sorted({v['labeler'] for v in reviewed.values()})) or 'none'}).\n")
     top = Counter(x["primary"] for x in labeled).most_common(3)
     md = [
         "# Failure summary", "",
