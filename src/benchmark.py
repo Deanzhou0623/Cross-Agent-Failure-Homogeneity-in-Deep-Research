@@ -771,7 +771,8 @@ def sample_query(cfg: dict, model_key: str) -> None:
         {k: v for k, v in h.items() if k != "snippet"} for h in hits["hits"]]},
         "document": {k: v for k, v in doc.items() if k != "text"},
         "model": mcfg["model_id"], "reasoning": mcfg["reasoning"], "usage": resp.usage,
-        "cost_usd": resp.cost_usd, "answer": resp.text[-400:], "judge_correct": verdict["correct"]},
+        "cost_usd": resp.cost_usd, "answer": resp.text[-400:], "judge_correct": verdict["correct"],
+        "reasoning_summary": (resp.reasoning_summary or "")[:300] or None},
         indent=2, ensure_ascii=False))
 
 
