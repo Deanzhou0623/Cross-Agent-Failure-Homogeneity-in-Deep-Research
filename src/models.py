@@ -370,7 +370,9 @@ class MockConversation(Conversation):
         usage = {"input": 100, "cached_input": 0, "cache_write": 0, "output": step.get("output_tokens", 20),
                  "reasoning": None}
         stop = step.get("stop_reason", "tool_use" if calls else "end_turn")
-        return Response(text, calls, step.get("reasoning_summary"), usage, 0.0, 0.0, stop,
+        price = self.mcfg.get("price")
+        cost = compute_cost(price, usage) if price and price.get("input") else 0.0
+        return Response(text, calls, step.get("reasoning_summary"), usage, cost, 0.0, stop,
                         step.get("served_model", self.model_id), {"model": self.model_id, "tool_choice": tool_choice})
 
     def native_history(self):

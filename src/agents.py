@@ -257,7 +257,7 @@ class RunError(Exception):
 
 class Run:
     def __init__(self, *, run_id: str, phase: str, agent: str, task: dict, mcfg: dict, retriever,
-                 trace_path: Path, budget: dict | None = None):
+                 trace_path: Path, budget: dict | None = None, meta: dict | None = None):
         self.b = budget or load_budget()
         self.run_id, self.phase, self.agent, self.task = run_id, phase, agent, task
         self.mcfg = {**mcfg, "max_output_tokens": self.b["max_output_tokens"]}
@@ -273,6 +273,7 @@ class Run:
         self.pending: list[tuple[str, str, str]] = []
         self.status: str | None = None
         self.error: dict | None = None
+        self.meta = meta or {}
 
     # -- lifecycle ----------------------------------------------------------- #
     def start(self) -> None:
@@ -283,11 +284,13 @@ class Run:
                        max_output_tokens=self.mcfg["max_output_tokens"], price=self.mcfg.get("price"),
                        budget={**self.b, "cost_cap_usd": self.cost_cap}, git_commit=_git_commit(),
                        retriever={"backend": r.backend_name, "index_version": r.index_version, **r.rcfg},
-                       system_prompt=self.system, query_template=QUERY_TEMPLATE, tools=TOOLS)
+                       system_prompt=self.system, query_template=QUERY_TEMPLATE, tools=TOOLS, meta=self.meta)
 
     @property
     def cost_cap(self) -> float:
-        return self.b["cost_cap_usd"][self.phase]
+        """Per-run cap: by phase; smoke/debug runs use the cap of the model's own phase."""
+        caps = self.b["cost_cap_usd"]
+        return caps[self.phase] if self.phase in caps else caps[self.mcfg.get("phase", "debug")]
 
     def open(self) -> models.Conversation:
         return models.open_conversation(self.mcfg, system=self.system)
@@ -302,7 +305,8 @@ class Run:
         self.trace.log("run_end", status=self.status or "error", error=self.error, totals=totals,
                        retrieved_docids=list(self.retrieved), read_docids=list(self.read))
         self.trace.close()
-        return {"run_id": self.run_id, "status": self.status, "trace": str(self.trace.path), **totals}
+        return {"run_id": self.run_id, "status": self.status or "error", "error": self.error,
+                "trace": str(self.trace.path), **totals}
 
     # -- budget -------------------------------------------------------------- #
     def exhausted(self) -> str | None:
@@ -542,12 +546,12 @@ AGENTS: dict[str, Callable[[Run], None]] = {"react": react, "plan_execute": plan
 
 
 def run_agent(agent: str, task: dict, mcfg: dict, retriever, trace_path: Path, *, run_id: str,
-              phase: str, budget: dict | None = None) -> dict:
+              phase: str, budget: dict | None = None, meta: dict | None = None) -> dict:
     """Run one agent on one task. task is a TaskView: {query_id, question} only."""
     if set(task) != {"query_id", "question"}:
         raise ValueError("agents receive only {query_id, question}")
     run = Run(run_id=run_id, phase=phase, agent=agent, task=task, mcfg=mcfg, retriever=retriever,
-              trace_path=trace_path, budget=budget)
+              trace_path=trace_path, budget=budget, meta=meta)
     run.start()
     try:
         AGENTS[agent](run)
