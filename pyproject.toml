@@ -1,0 +1,25 @@
+[project]
+name = "failure-homogeneity"
+version = "0.1.0"
+description = "Pilot study of shared failure mechanisms across search agents and LLM backbones on BrowseComp-Plus"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "anthropic>=0.70",
+    "openai>=2.0",
+    "google-genai>=1.40",
+    "numpy>=1.26",
+    "huggingface_hub>=0.30",
+    "pyarrow>=17",
+    "tokenizers>=0.20",
+    "pyyaml>=6",
+    "python-dotenv>=1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["live: calls external services; run manually with -m live"]
+addopts = "-m 'not live'"

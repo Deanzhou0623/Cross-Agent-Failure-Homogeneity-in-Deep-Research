@@ -15,7 +15,7 @@ Each spec has: Goal, Requirements, Design notes, Done when, Open questions.
 
 ## Keep it small
 
-- Plain Python 3.11 with `uv`, `pytest`, and the official provider SDKs.
+- Plain Python 3.11+ with `uv`, `pytest`, and the official provider SDKs.
 - Five modules in `src/`: `benchmark.py`, `models.py`, `agents.py`, `runner.py`, `analyze.py`.
 - No frontend, database server, task queue, or deployment. Traces are JSONL files; outputs are CSV, JSON, or Markdown.
 - Settings (model IDs, thinking levels, budgets, task IDs) live in `configs/`, not in code.

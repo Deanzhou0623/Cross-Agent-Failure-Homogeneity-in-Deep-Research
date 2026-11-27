@@ -1,0 +1,128 @@
+seed: 20261125
+difficulty_source: BrowseComp-Plus published runs (gpt5, o3) x (bm25, qwen3-embed-8b),
+  judged by Qwen3-32B
+phase1_task_ids:
+- '495'
+- '1233'
+- '915'
+- '286'
+- '1111'
+- '366'
+- '176'
+- '833'
+- '417'
+- '580'
+phase2_task_ids:
+- '1233'
+- '286'
+- '366'
+- '417'
+- '580'
+tasks:
+- query_id: '495'
+  stratum: hard
+  baseline_correct:
+    bm25/gpt5.jsonl: true
+    bm25/o3.jsonl: false
+    qwen3-embed-8b/gpt5.jsonl: false
+    qwen3-embed-8b/o3.jsonl: false
+  n_evidence: 2
+  n_gold: 1
+  rationale: solved by 1/4 published runs; answer judged unambiguous on manual review
+- query_id: '1233'
+  stratum: hard
+  baseline_correct:
+    bm25/gpt5.jsonl: false
+    bm25/o3.jsonl: false
+    qwen3-embed-8b/gpt5.jsonl: true
+    qwen3-embed-8b/o3.jsonl: false
+  n_evidence: 5
+  n_gold: 5
+  rationale: solved by 1/4 published runs; answer judged unambiguous on manual review
+- query_id: '915'
+  stratum: hard
+  baseline_correct:
+    bm25/gpt5.jsonl: false
+    bm25/o3.jsonl: false
+    qwen3-embed-8b/gpt5.jsonl: false
+    qwen3-embed-8b/o3.jsonl: true
+  n_evidence: 7
+  n_gold: 3
+  rationale: solved by 1/4 published runs; answer judged unambiguous on manual review
+- query_id: '286'
+  stratum: hard
+  baseline_correct:
+    bm25/gpt5.jsonl: false
+    bm25/o3.jsonl: false
+    qwen3-embed-8b/gpt5.jsonl: true
+    qwen3-embed-8b/o3.jsonl: false
+  n_evidence: 3
+  n_gold: 2
+  rationale: solved by 1/4 published runs; answer judged unambiguous on manual review
+- query_id: '1111'
+  stratum: hard
+  baseline_correct:
+    bm25/gpt5.jsonl: false
+    bm25/o3.jsonl: false
+    qwen3-embed-8b/gpt5.jsonl: false
+    qwen3-embed-8b/o3.jsonl: true
+  n_evidence: 5
+  n_gold: 3
+  rationale: solved by 1/4 published runs; answer judged unambiguous on manual review
+- query_id: '366'
+  stratum: hard
+  baseline_correct:
+    bm25/gpt5.jsonl: false
+    bm25/o3.jsonl: false
+    qwen3-embed-8b/gpt5.jsonl: true
+    qwen3-embed-8b/o3.jsonl: false
+  n_evidence: 9
+  n_gold: 7
+  rationale: solved by 1/4 published runs; answer judged unambiguous on manual review
+- query_id: '176'
+  stratum: hard
+  baseline_correct:
+    bm25/gpt5.jsonl: false
+    bm25/o3.jsonl: false
+    qwen3-embed-8b/gpt5.jsonl: false
+    qwen3-embed-8b/o3.jsonl: true
+  n_evidence: 9
+  n_gold: 9
+  rationale: solved by 1/4 published runs; answer judged unambiguous on manual review
+- query_id: '833'
+  stratum: moderate
+  baseline_correct:
+    bm25/gpt5.jsonl: false
+    bm25/o3.jsonl: false
+    qwen3-embed-8b/gpt5.jsonl: true
+    qwen3-embed-8b/o3.jsonl: true
+  n_evidence: 9
+  n_gold: 1
+  rationale: solved by 2/4 published runs; answer judged unambiguous on manual review
+- query_id: '417'
+  stratum: moderate
+  baseline_correct:
+    bm25/gpt5.jsonl: false
+    bm25/o3.jsonl: true
+    qwen3-embed-8b/gpt5.jsonl: false
+    qwen3-embed-8b/o3.jsonl: true
+  n_evidence: 4
+  n_gold: 2
+  rationale: solved by 2/4 published runs; answer judged unambiguous on manual review
+- query_id: '580'
+  stratum: moderate
+  baseline_correct:
+    bm25/gpt5.jsonl: false
+    bm25/o3.jsonl: false
+    qwen3-embed-8b/gpt5.jsonl: true
+    qwen3-embed-8b/o3.jsonl: true
+  n_evidence: 5
+  n_gold: 3
+  rationale: solved by 2/4 published runs; answer judged unambiguous on manual review
+excluded:
+- query_id: '1236'
+  stratum: hard
+  reason: judge error
+- query_id: '941'
+  stratum: hard
+  reason: judge error

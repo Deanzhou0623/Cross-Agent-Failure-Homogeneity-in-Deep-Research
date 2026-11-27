@@ -22,7 +22,7 @@ One run per configuration. Debugging uses tasks outside the 10.
 | OpenAI | `gpt-6-luna` | `gpt-6.1-terra` |
 | Google | `gemini-3.5-flash-lite` | `gemini-3.8-flash` |
 
-Models are matched by lineup position (each provider's smallest, then middle model), not by price. IDs and reasoning settings are checked with one real call each before any experiment. Gemini Flash-Lite defaults to `minimal` thinking, so it is set to `high` explicitly.
+Models are matched by lineup position (each provider's smallest, then middle model), not by price. IDs and reasoning settings are checked with one real call each before any experiment. Gemini Flash-Lite defaults to `minimal` thinking, so it is set to `high` explicitly. Some providers silently route retired IDs to newer models (`gemini-3.5-flash` → 3.6, `gemini-3.7-flash` → 3.8), so every call logs the model that actually served it, and a mismatch stops the run. If 3.8 Flash is unavailable when Phase 2 starts, `gemini-3.6-flash` (same price) replaces it for the whole phase; the switch is never made mid-phase.
 
 ### Agents
 
@@ -38,7 +38,7 @@ All three use the same tools, corpus, prompt format, and budget.
 
 - **BrowseComp-Plus**: 830 questions over a fixed corpus of about 100K documents. Retrieval always searches the full corpus.
 - **Tools**, as in the official setup: `search` returns the top 5 documents with 512-token snippets; `get_document` returns one document's text.
-- **Retriever**: the hosted Qwen3-Embedding-8B server that BrowseComp-Plus links to (NetMind) if it works, otherwise local BM25. Every search response is cached so runs can be replayed.
+- **Retriever**: Qwen3-Embedding-8B, as in the stronger published runs: the official corpus index is searched locally, and only each query is embedded through a hosted API (about $0.01 per 1M tokens). Local BM25 is the fallback. Every search response is cached so runs can be replayed.
 - **Budget per run**: at most 30 tool calls (10 of them document reads) and 15 minutes. When the budget runs out, the agent is asked once for its final answer.
 
 ### Choosing the 10 tasks
@@ -74,6 +74,23 @@ Reasoning text is logged only as each provider exposes it (for example, summarie
 
 A hard cap of **$30** for all API calls, with prompt caching on. The estimate is about $25–35 with caching. It drops to about $20–30 if the Gemini runs use Google AI Pro developer credits. A smoke test on a few non-study tasks measures real costs before the 135 runs, and nothing paid runs without explicit approval.
 
+## Quick start
+
+```bash
+uv sync                                    # install
+cp .env.example .env                       # then fill in the API keys
+uv run pytest                              # offline tests, no keys needed
+
+uv run python -m src.benchmark download    # queries, answers, qrels, published runs -> data/
+uv run python -m src.benchmark download-index   # search index + corpus, ~3.4 GB -> data/
+uv run python -m src.models check          # one short call per model (~$0.05)
+uv run python -m src.benchmark check-retrieval
+uv run python -m src.benchmark score-runs --dry-run   # then without --dry-run (~$0.60)
+uv run python -m src.benchmark candidates  # then screen configs/task_screening.yaml by hand
+uv run python -m src.benchmark finalize    # writes configs/tasks.yaml
+uv run python -m src.benchmark sample --model haiku   # one query end to end
+```
+
 ## Project structure
 
 ```text
@@ -104,3 +121,4 @@ A hard cap of **$30** for all API calls, with prompt caching on. The estimate is
 - Phase 1 and Phase 2 change both the models and the thinking level, so differences between phases are not a pure capability effect.
 - Provider thinking levels are not directly equivalent.
 - Difficulty is measured on GPT-5 and o3, a proxy for how hard tasks are for our models.
+- The only hosted Qwen3-32B judge is fp8. It scores the published runs 3.5–5.5 points below the leaderboard, mostly by rejecting answers that differ only in formatting, so every "incorrect" verdict on our runs is checked by hand.

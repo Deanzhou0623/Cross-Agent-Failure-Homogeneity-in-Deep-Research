@@ -1,0 +1,56 @@
+# BrowseComp-Plus setup (spec 01)
+dataset_repo: Tevatron/browsecomp-plus
+runs_repo: Tevatron/browsecomp-plus-runs
+qrels_base_url: https://raw.githubusercontent.com/texttron/BrowseComp-Plus/main/topics-qrels
+published_runs:            # path in runs_repo -> leaderboard accuracy (Qwen3-32B judge)
+  bm25/gpt5.jsonl: 57.59
+  bm25/o3.jsonl: 50.48
+  qwen3-embed-8b/gpt5.jsonl: 71.69
+  qwen3-embed-8b/o3.jsonl: 65.90
+
+retrieval:
+  # 2026-11-26: NetMind's hosted server is gone (mcp.netmind.ai no longer resolves). Same retriever,
+  # run locally: the official precomputed corpus index + hosted query embeddings (same model).
+  backend: qwen3-embedding-8b
+  index_repo: Tevatron/browsecomp-plus-indexes
+  index_dir: qwen3-embedding-8b
+  index_shards: 4
+  corpus_repo: Tevatron/browsecomp-plus-corpus
+  query_embedding:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    model: qwen/qwen3-embedding-8b
+    pin_provider: DeepInfra
+    price_per_m_tokens: 0.01
+    task_prefix: "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
+  k: 5
+  snippet_max_tokens: 512
+  document_max_tokens: 4096
+  snippet_tokenizer: Qwen/Qwen3-0.6B
+  published_evidence_recall_at_5: {qwen3-embedding-8b: 0.1453, bm25: 0.0118}
+
+judge:
+  model: Qwen/Qwen3-32B
+  temperature: 0.7
+  top_p: 0.8
+  top_k: 20
+  max_tokens: 4096
+  enable_thinking: false
+  providers:
+    deepinfra:
+      base_url: https://api.deepinfra.com/v1/openai
+      model: Qwen/Qwen3-32B
+      price: {input: 0.10, output: 0.30}
+    openrouter:
+      base_url: https://openrouter.ai/api/v1
+      model: qwen/qwen3-32b
+      pin_provider: DeepInfra
+      price: {input: 0.10, output: 0.30}
+  cost_cap_usd: 1.50
+
+selection:
+  seed: 20261125
+  n_hard: 7
+  n_moderate: 3
+  phase2_hard: 3
+  phase2_moderate: 2
