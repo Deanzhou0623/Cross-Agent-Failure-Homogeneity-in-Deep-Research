@@ -1,0 +1,26 @@
+{
+  "actual_usd": 4.8559,
+  "by_model": {
+    "flash_lite": {
+      "actual_usd": 3.0493,
+      "actual_usd_per_run": 0.1016,
+      "estimated_usd_per_run": 0.1001,
+      "runs": 30
+    },
+    "haiku": {
+      "actual_usd": 1.5123,
+      "actual_usd_per_run": 0.0504,
+      "estimated_usd_per_run": 0.0461,
+      "runs": 30
+    },
+    "luna": {
+      "actual_usd": 0.2943,
+      "actual_usd_per_run": 0.0098,
+      "estimated_usd_per_run": 0.0098,
+      "runs": 30
+    }
+  },
+  "correct": 46,
+  "estimated_usd": 4.68,
+  "runs": 90
+}

@@ -1,0 +1,21 @@
+{
+  "runs": 90,
+  "estimated_usd": 4.68,
+  "by_model": {
+    "haiku": {
+      "runs": 30,
+      "usd_per_run": 0.0461,
+      "source": "smoke"
+    },
+    "luna": {
+      "runs": 30,
+      "usd_per_run": 0.0098,
+      "source": "smoke"
+    },
+    "flash_lite": {
+      "runs": 30,
+      "usd_per_run": 0.1001,
+      "source": "smoke"
+    }
+  }
+}
