@@ -46,4 +46,4 @@ phase2:
     billing: google_credits
 
 # Shared call settings
-max_output_tokens: 32000
+max_output_tokens: 16000   # per call, thinking included; same for every model (spec 02, item 3)

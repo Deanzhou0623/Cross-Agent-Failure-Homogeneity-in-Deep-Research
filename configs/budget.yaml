@@ -1,0 +1,17 @@
+# Per-run budget (spec 02, item 3). Identical for all agents and models within a phase.
+max_tool_calls: 30          # search + get_document
+max_get_document: 10        # of the 30
+max_model_calls: 40         # includes planning and ledger turns; the final-answer request is extra
+max_output_tokens: 16000    # per model call, thinking included
+max_wall_minutes: 15
+cost_cap_usd:               # per run; ~5x the expected average from the budget estimate
+  phase1: 0.40
+  phase2: 1.50
+  debug: 0.40
+# Plan-and-Execute: a step is blocked after this many tool calls in a row that surface no new docid
+blocked_after_unproductive_calls: 3
+# Degenerate output (spec 02, item 7)
+degenerate:
+  min_visible_chars: 200     # non-whitespace characters in the visible text
+  max_repeated_line: 20      # one line repeated this many times
+  retries: 2
