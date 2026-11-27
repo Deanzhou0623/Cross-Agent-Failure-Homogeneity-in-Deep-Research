@@ -85,6 +85,11 @@ def test_total_and_gemini_caps(tmp_path):
     spent = {"total": 0.0, "google_credits": 14.8, "by_phase": {}}
     assert "google_credits cap" in rn.cap_problem(SPECS[0], spent, b, {**m, "billing": "google_credits"})
     assert rn.cap_problem(SPECS[0], spent, b, m) is None              # non-Gemini runs are unaffected
+    # in-flight room counts each running run's own cap, not this run's cap times the worker count
+    smoke = rn.RunSpec("smoke", "t1", "react", "sonnet")
+    spent = {"total": 0.5, "google_credits": 0.4, "by_phase": {"smoke": 0.47}}
+    assert rn.cap_problem(smoke, spent, b, {"phase": "phase2"}, inflight_room=0.8) is None      # 0.47+0.8+1.5 <= 4
+    assert "smoke cap" in rn.cap_problem(smoke, spent, b, {"phase": "phase2"}, inflight_room=3.0)
 
 
 class FakeJudge:

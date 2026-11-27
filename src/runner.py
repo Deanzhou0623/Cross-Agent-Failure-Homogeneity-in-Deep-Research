@@ -158,11 +158,14 @@ def spending(budget: dict, results: Path = RESULTS, judge_cache: Path | None = b
     return {**{k: round(v, 4) for k, v in spent.items()}, "by_phase": {k: round(v, 4) for k, v in by_phase.items()}}
 
 
-def cap_problem(spec: RunSpec, spent: dict, budget: dict, mcfg: dict, inflight: int = 0) -> str | None:
-    """Stop before a run that could cross a cap: room needed = (in-flight runs + 1) x per-run cap."""
+def per_run_cap(spec: RunSpec, budget: dict, mcfg: dict) -> float:
+    return budget["cost_cap_usd"].get(spec.phase) or budget["cost_cap_usd"][mcfg["phase"]]
+
+
+def cap_problem(spec: RunSpec, spent: dict, budget: dict, mcfg: dict, inflight_room: float = 0.0) -> str | None:
+    """Stop before a run that could cross a cap: room needed = this run's cap + the caps of runs in flight."""
     caps = budget["caps_usd"]
-    per_run = budget["cost_cap_usd"].get(spec.phase) or budget["cost_cap_usd"][mcfg["phase"]]
-    room = (inflight + 1) * per_run
+    room = inflight_room + per_run_cap(spec, budget, mcfg)
     if spent["by_phase"].get(spec.phase, 0.0) + room > caps[spec.phase]:
         return f"{spec.phase} cap ${caps[spec.phase]}"
     bucket = "google_credits" if mcfg.get("billing") == "google_credits" else "total"
@@ -222,7 +225,7 @@ class Runner:
         self.make_retriever = make_retriever or self._default_retriever
         self.judge_cache = judge_cache
         self.lock = threading.Lock()
-        self.inflight = 0
+        self.inflight_room = 0.0          # sum of per-run caps of runs in flight
         self.stop_reason: str | None = None
         self._retriever = None
 
@@ -237,11 +240,11 @@ class Runner:
             if self.stop_reason:
                 return False
             spent = spending(self.budget, self.results, self.judge_cache)
-            problem = cap_problem(spec, spent, self.budget, mcfg, self.inflight)
+            problem = cap_problem(spec, spent, self.budget, mcfg, self.inflight_room)
             if problem:
                 self.stop_reason = f"stopped before {spec.run_id}: {problem} (spent {spent})"
                 return False
-            self.inflight += 1
+            self.inflight_room += per_run_cap(spec, self.budget, mcfg)
             return True
 
     def run_one(self, spec: RunSpec) -> str:
@@ -263,7 +266,7 @@ class Runner:
                                        phase=spec.phase, budget=self.budget, meta={**meta, "attempt": n})
             finally:
                 with self.lock:
-                    self.inflight -= 1
+                    self.inflight_room -= per_run_cap(spec, self.budget, mcfg)
             self.log(f"{spec.run_id} attempt {n}: {summary['status']} ${summary['cost_usd']:.4f}"
                      + (f" ({summary['error']['kind']})" if summary.get("error") else ""))
             if summary["status"] in DONE:
