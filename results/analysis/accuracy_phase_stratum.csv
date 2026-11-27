@@ -1,0 +1,5 @@
+group,correct,runs,accuracy
+phase1 hard,27,63,0.429
+phase1 moderate,19,27,0.704
+phase2 hard,19,27,0.704
+phase2 moderate,12,18,0.667

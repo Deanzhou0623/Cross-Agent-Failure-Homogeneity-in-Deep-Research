@@ -1,0 +1,31 @@
+phase,exposure,pair_kind,pairs,mean_jaccard,baseline,p_value,same_final_answer
+phase1,all,"same agent, different model",24,0.424,0.387,0.2482,4/24
+phase1,all,"same model, different agent",35,0.681,0.386,0.0001,10/35
+phase1,all,neither,49,0.408,0.388,0.3032,4/49
+phase1,same level,"same agent, different model",18,0.469,0.534,0.8274,3/18
+phase1,same level,"same model, different agent",28,0.78,0.537,0.0001,7/28
+phase1,same level,neither,35,0.461,0.534,0.932,4/35
+phase1,E0,"same agent, different model",14,0.458,0.532,0.8285,1/14
+phase1,E0,"same model, different agent",20,0.825,0.531,0.0002,5/20
+phase1,E0,neither,26,0.46,0.531,0.8898,2/26
+phase1,E1,"same agent, different model",2,0.35,0.494,0.9561,0/2
+phase1,E1,"same model, different agent",4,0.667,0.494,0.0775,0/4
+phase1,E1,neither,5,0.44,0.495,0.742,0/5
+phase1,E2,"same agent, different model",2,0.667,0.6,0.5966,2/2
+phase1,E2,"same model, different agent",4,0.667,0.6,0.4015,2/4
+phase1,E2,neither,4,0.5,0.6,0.8996,2/4
+phase2,all,"same agent, different model",6,0.611,0.271,0.0081,2/6
+phase2,all,"same model, different agent",7,0.714,0.274,0.0007,1/7
+phase2,all,neither,13,0.474,0.272,0.0104,4/13
+phase2,same level,"same agent, different model",5,0.633,0.521,0.142,1/5
+phase2,same level,"same model, different agent",5,0.7,0.521,0.0436,0/5
+phase2,same level,neither,11,0.485,0.519,0.7339,3/11
+phase2,E0,"same agent, different model",2,0.583,0.514,0.3373,1/2
+phase2,E0,"same model, different agent",2,0.667,0.512,0.2021,0/2
+phase2,E0,neither,6,0.417,0.51,0.9303,0/6
+phase2,E1,"same agent, different model",0,,,,0/0
+phase2,E1,"same model, different agent",0,,,,0/0
+phase2,E1,neither,0,,,,0/0
+phase2,E2,"same agent, different model",3,0.667,0.528,0.284,0/3
+phase2,E2,"same model, different agent",3,0.722,0.527,0.1104,0/3
+phase2,E2,neither,5,0.567,0.531,0.4061,3/5

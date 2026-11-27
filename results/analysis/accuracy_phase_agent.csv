@@ -1,0 +1,7 @@
+group,correct,runs,accuracy
+phase1 evidence_driven,18,30,0.6
+phase1 plan_execute,12,30,0.4
+phase1 react,16,30,0.533
+phase2 evidence_driven,12,15,0.8
+phase2 plan_execute,8,15,0.533
+phase2 react,11,15,0.733

@@ -34,7 +34,9 @@ from src import benchmark as bm
 from src import models
 
 RESULTS = bm.ROOT / "results"
-PHASES = {"smoke": "smoke", "1": "phase1", "2": "phase2", "phase1": "phase1", "phase2": "phase2"}
+PHASES = {"smoke": "smoke", "1": "phase1", "2": "phase2", "phase1": "phase1", "phase2": "phase2",
+          "evidence": "evidence"}
+STUDY_PHASES = ("phase1", "phase2", "evidence")
 DONE = ("completed", "budget_exhausted")
 CONFIG_FILES = ("models.yaml", "budget.yaml", "tasks.yaml", "benchmark.yaml")
 
@@ -78,6 +80,10 @@ def plan_runs(phase: str) -> list[RunSpec]:
         tasks = smoke_task_ids()
         return [RunSpec("smoke", tasks[j], a, m) for p in ("phase1", "phase2") for m in mcfg[p]
                 for j, a in enumerate(agents)]
+    if phase == "evidence":   # controlled-evidence reruns of selected failed runs (spec 04, item 14)
+        path = bm.CONFIGS / "evidence_check.yaml"
+        runs = yaml.safe_load(path.read_text())["runs"] if path.exists() else []
+        return [RunSpec("evidence", r["task_id"], r["agent"], r["model"]) for r in runs]
     tasks = _yaml("tasks.yaml")[f"{phase}_task_ids"]
     return [RunSpec(phase, t, a, m) for t in tasks for a in agents for m in mcfg[phase]]
 
@@ -262,8 +268,11 @@ class Runner:
             return state
         mcfg = self.load_model(spec.model)
         task = self.tasks[spec.task_id].view()
+        context = None
+        if spec.phase == "evidence":
+            context = self.tasks[spec.task_id].gold_docids[:self.budget["evidence_max_context_docs"]]
         meta = {"config_sha256": config_hashes(), "git_dirty": git_dirty(), "billing": mcfg.get("billing", "default"),
-                "run_spec": spec.__dict__}
+                "run_spec": spec.__dict__, **({"context_docids": context} if context else {})}
         while len(attempts(spec, self.results)) < max_attempts:
             if not self._claim(spec, mcfg):
                 return "stopped"
@@ -271,7 +280,8 @@ class Runner:
             try:
                 summary = ag.run_agent(spec.agent, task, mcfg, self.make_retriever(),
                                        run_dir(spec, self.results) / f"attempt-{n}.jsonl", run_id=spec.run_id,
-                                       phase=spec.phase, budget=self.budget, meta={**meta, "attempt": n})
+                                       phase=spec.phase, budget=self.budget, meta={**meta, "attempt": n},
+                                       context_docids=context)
             finally:
                 with self.lock:
                     self.inflight_room -= per_run_cap(spec, self.budget, mcfg)
@@ -488,7 +498,7 @@ def main(argv: list[str] | None = None) -> None:
             return
         if not args.confirm:
             sys.exit("paid runs need --confirm (and the cost confirmation); nothing was run")
-        if phase in ("phase1", "phase2") and git_dirty():
+        if phase in STUDY_PHASES and git_dirty():
             sys.exit("src/ or configs/ has uncommitted changes: commit and tag before a study phase")
         if not _confirm(est, args.confirm_cost):
             sys.exit("not confirmed; nothing was run")

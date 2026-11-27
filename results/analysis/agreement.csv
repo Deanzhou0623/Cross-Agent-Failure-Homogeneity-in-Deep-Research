@@ -1,0 +1,21 @@
+comparison,label,runs,kappa
+first vs second rater,query_formulation,12,1.0
+first vs second rater,retrieval,12,0.226
+first vs second rater,evidence_selection,12,0.333
+first vs second rater,evidence_utilization,12,0.625
+first vs second rater,reasoning,12,-0.0
+first vs second rater,verification,12,1.0
+first vs second rater,premature_commitment,12,0.625
+first vs second rater,stopping,12,0.385
+first vs second rater,other,12,
+first vs second rater,(primary agrees),12,6/12
+first vs reviewed,query_formulation,0,
+first vs reviewed,retrieval,0,
+first vs reviewed,evidence_selection,0,
+first vs reviewed,evidence_utilization,0,
+first vs reviewed,reasoning,0,
+first vs reviewed,verification,0,
+first vs reviewed,premature_commitment,0,
+first vs reviewed,stopping,0,
+first vs reviewed,other,0,
+first vs reviewed,(primary agrees),0,
