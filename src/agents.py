@@ -87,6 +87,11 @@ STRATEGIES = {
 CONTEXT_INTRO = "Documents from the corpus that may help (you can still search and open others):"
 PLAN_FIRST = "Before using any tools, write your plan as JSON only."
 EXECUTE_STEP = "Execute step {step}: {goal}"
+# Plan-and-Execute fix (2026-11-27): the planning call has tools disabled, and some models then concluded they
+# had no tools at all. Phases in PLAN_NOTE_PHASES say that the tools come with the execute steps.
+PLAN_NOTE_PHASES = {"pefix"}
+PLAN_TOOLS_NOTE = "The search and get_document tools become available when you execute each step."
+EXECUTE_TOOLS_NOTE = "Use the search and get_document tools as needed."
 REPLAN = "Replan: {reason}.\nFindings so far:\n{findings}\nWrite a revised plan as JSON only, covering what is still needed."
 PLAN_NUDGE = "Reply with the step status JSON, call a tool, or give the final answer in the required format."
 LEDGER_DONE = "No gaps remain in your ledger. Give the final answer in the required format."
@@ -462,7 +467,8 @@ def react(run: Run) -> None:
 
 def plan_execute(run: Run) -> None:
     conv = run.open()
-    conv.add_user(run.prompt() + "\n\n" + PLAN_FIRST)
+    note = run.phase in PLAN_NOTE_PHASES
+    conv.add_user(run.prompt() + "\n\n" + PLAN_FIRST + (" " + PLAN_TOOLS_NOTE if note else ""))
     findings: list[str] = []
     version = 0
 
@@ -494,7 +500,8 @@ def plan_execute(run: Run) -> None:
             continue
         step = plan[i]
         # A new step gets its instruction; a continuing step gets only the pending tool results.
-        r = run.call(conv, "act", text=EXECUTE_STEP.format(**step) if new_step else nudge)
+        step_text = EXECUTE_STEP.format(**step) + ("\n" + EXECUTE_TOOLS_NOTE if note else "")
+        r = run.call(conv, "act", text=step_text if new_step else nudge)
         new_step, nudge = False, None
         if r.tool_calls:
             limit, flags = run.execute(r.tool_calls)

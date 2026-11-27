@@ -219,3 +219,13 @@ def test_parse_final_and_json():
     assert ag.parse_final("no format")["exact_answer"] is None
     assert ag.extract_json('Ledger:\n```json\n{"gaps": []}\n```\nthen') == {"gaps": []}
     assert ag.extract_json("nothing here") is None
+
+
+def test_plan_note_only_in_fix_phase(retriever, tmp_path):
+    script = SCRIPTS["plan_execute"]
+    for phase, expect in (("debug", False), ("pefix", True)):
+        path = tmp_path / f"{phase}.jsonl"
+        ag.run_agent("plan_execute", TASK, mock(script), retriever, path, run_id="t", phase=phase,
+                     budget={**ag.load_budget(), "cost_cap_usd": {"debug": 0.4, "pefix": 0.4}})
+        prompts = json.dumps([e["prompt"] for e in ag.read_trace(path) if e["type"] == "model_call"])
+        assert (ag.PLAN_TOOLS_NOTE in prompts) is expect and (ag.EXECUTE_TOOLS_NOTE in prompts) is expect

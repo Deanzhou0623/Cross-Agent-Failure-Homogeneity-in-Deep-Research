@@ -24,6 +24,7 @@ caps_usd:
   total: 30.0               # Anthropic + OpenAI + OpenRouter (judge, query embeddings); not Gemini
   google_credits: 15.0      # Gemini, billed to Google AI Pro developer credits
   evidence: 2.0             # controlled-evidence check (spec 04, item 14); per-run cap = the model's phase
+  pefix: 1.0                # Plan-and-Execute fix reruns (Luna and Terra cells); per-run cap = the model's phase
 # Controlled-evidence check: gold documents put into the first prompt (qrels order), 4,096 tokens each
 evidence_max_context_docs: 3
 # Spending before the runner existed that no trace or judge cache records (spec 01/02 checks).

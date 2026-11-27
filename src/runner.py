@@ -35,8 +35,10 @@ from src import models
 
 RESULTS = bm.ROOT / "results"
 PHASES = {"smoke": "smoke", "1": "phase1", "2": "phase2", "phase1": "phase1", "phase2": "phase2",
-          "evidence": "evidence"}
-STUDY_PHASES = ("phase1", "phase2", "evidence")
+          "evidence": "evidence", "pefix": "pefix"}
+STUDY_PHASES = ("phase1", "phase2", "evidence", "pefix")
+# Plan-and-Execute fix: rerun the two cells whose planning calls gave up without searching (Luna, Terra)
+PEFIX_CELLS = (("luna", "phase1"), ("terra", "phase2"))
 DONE = ("completed", "budget_exhausted")
 CONFIG_FILES = ("models.yaml", "budget.yaml", "tasks.yaml", "benchmark.yaml")
 
@@ -84,6 +86,9 @@ def plan_runs(phase: str) -> list[RunSpec]:
         path = bm.CONFIGS / "evidence_check.yaml"
         runs = yaml.safe_load(path.read_text())["runs"] if path.exists() else []
         return [RunSpec("evidence", r["task_id"], r["agent"], r["model"]) for r in runs]
+    if phase == "pefix":
+        tasks = _yaml("tasks.yaml")
+        return [RunSpec("pefix", t, "plan_execute", m) for m, p in PEFIX_CELLS for t in tasks[f"{p}_task_ids"]]
     tasks = _yaml("tasks.yaml")[f"{phase}_task_ids"]
     return [RunSpec(phase, t, a, m) for t in tasks for a in agents for m in mcfg[phase]]
 
