@@ -40,6 +40,9 @@ phase2:
     reasoning: {thinking_level: medium}
     price: {input: 0.75, cached_input: 0.075, output: 3.75}
     notes: introductory price until 2026-12-31; 1.50 / 7.50 from 2027-01-01
+    # Fallback if 3.8 Flash is unavailable when Phase 2 starts (decided before the phase, never mid-phase):
+    # gemini-3.6-flash, same price. Not gemini-3.7-flash or gemini-3.5-flash: those IDs route to 3.8 / 3.6.
+    fallback_model_id: gemini-3.6-flash
     billing: google_credits
 
 # Shared call settings

@@ -261,3 +261,11 @@ def test_index_unpickler_blocks_code():
 
     with pytest.raises(pickle.UnpicklingError):
         bm._ArrayUnpickler(io.BytesIO(pickle.dumps(Evil()))).load()
+
+
+def test_served_model_mismatch_is_detected():
+    assert models.served_matches("gemini-3.6-flash", "gemini-3.6-flash")
+    assert models.served_matches("gpt-6-luna", "gpt-6-luna-2026-08-01")
+    assert not models.served_matches("gemini-3.7-flash", "gemini-3.8-flash")
+    assert not models.served_matches("gemini-3.5-flash", "gemini-3.6-flash")
+    assert not models.served_matches("claude-haiku-5-5", None)

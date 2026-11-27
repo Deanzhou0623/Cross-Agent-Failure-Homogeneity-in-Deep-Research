@@ -350,6 +350,17 @@ CHECK_TOOL = {"name": "search", "description": "Search a document collection. Re
                              "required": ["query"]}}
 
 
+def served_matches(requested: str, served: str | None) -> bool:
+    """True if the provider served the requested model (allowing dated snapshots like `-2026-08-01`).
+
+    Providers can silently route retired IDs to other models (gemini-3.7-flash -> gemini-3.8-flash).
+    """
+    if not served:
+        return False
+    served = served.removeprefix("models/")
+    return served == requested or served.startswith(requested + "-")
+
+
 def check_model(key: str) -> dict:
     """Two short calls: one that should request the tool, one with a tool result. About $0.01."""
     mcfg = load_model(key)
@@ -357,7 +368,9 @@ def check_model(key: str) -> dict:
     conv = open_conversation(mcfg, system="Use the search tool before answering.")
     conv.add_user("Which river flows through Paris? Search first, then answer in one word.")
     r1 = conv.step([CHECK_TOOL])
-    out: dict[str, Any] = {"model": key, "model_id_returned": r1.model_id, "request": r1.request,
+    out: dict[str, Any] = {"model": key, "model_id_returned": r1.model_id,
+                           "served_matches_requested": served_matches(mcfg["model_id"], r1.model_id),
+                           "request": r1.request,
                            "first_call": {"tool_calls": [c.__dict__ for c in r1.tool_calls],
                                           "usage": r1.usage, "has_reasoning_summary": bool(r1.reasoning_summary),
                                           "stop_reason": r1.stop_reason}}

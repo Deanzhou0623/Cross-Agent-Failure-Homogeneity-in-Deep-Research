@@ -22,7 +22,7 @@ One run per configuration. Debugging uses tasks outside the 10.
 | OpenAI | `gpt-6-luna` | `gpt-6.1-terra` |
 | Google | `gemini-3.5-flash-lite` | `gemini-3.8-flash` |
 
-Models are matched by lineup position (each provider's smallest, then middle model), not by price. IDs and reasoning settings are checked with one real call each before any experiment. Gemini Flash-Lite defaults to `minimal` thinking, so it is set to `high` explicitly.
+Models are matched by lineup position (each provider's smallest, then middle model), not by price. IDs and reasoning settings are checked with one real call each before any experiment. Gemini Flash-Lite defaults to `minimal` thinking, so it is set to `high` explicitly. Some providers silently route retired IDs to newer models (`gemini-3.5-flash` → 3.6, `gemini-3.7-flash` → 3.8), so every call logs the model that actually served it, and a mismatch stops the run. If 3.8 Flash is unavailable when Phase 2 starts, `gemini-3.6-flash` (same price) replaces it for the whole phase; the switch is never made mid-phase.
 
 ### Agents
 
