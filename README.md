@@ -134,3 +134,9 @@ uv run python -m src.agents try --agent react --model haiku   # one agent run on
 - Provider thinking levels are not directly equivalent.
 - Difficulty is measured on GPT-5 and o3, a proxy for how hard tasks are for our models.
 - The only hosted Qwen3-32B judge is fp8. It scores the published runs 3.5–5.5 points below the leaderboard, mostly by rejecting answers that differ only in formatting, so every "incorrect" verdict on our runs is checked by hand.
+
+## Change log
+
+Changes after Phase 1 started (tag `phase1-start`). Prompts, tools, budgets and tasks are unchanged.
+
+- **2026-11-27, runner `--retry-missing`.** During Phase 2 the Google prepayment credits ran out, so all 4 attempts of 6 Gemini 3.8 Flash runs (tasks 417 and 580, all three agents) failed with `402 RESOURCE_EXHAUSTED` before any model output. After the credits were topped up, these runs were retried with a fresh set of 4 attempts. The failed attempts stay on disk as `attempt-1..4`; the retry continues at `attempt-5`. Only run bookkeeping changed (`src/runner.py`).

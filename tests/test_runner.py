@@ -58,6 +58,12 @@ def test_errors_retry_then_missing(tmp_path):
     assert runner.run_all()["states"] == {"missing": 1}
     assert len(rn.attempts(SPECS[0], tmp_path / "results")) == 4      # 1 try + 3 retries
     assert make_runner(tmp_path, [{"text": FINAL}], specs=SPECS[:1]).run_all()["states"] == {"missing": 1}
+    # --retry-missing: a fresh set of attempts; the earlier ones stay on disk and numbering continues
+    retry = make_runner(tmp_path, [{"text": FINAL}], specs=SPECS[:1])
+    retry.retry_missing = True
+    assert retry.run_all()["states"] == {"done": 1}
+    assert len(rn.attempts(SPECS[0], tmp_path / "results")) == 5
+    assert rn.done_trace(SPECS[0], tmp_path / "results").name == "attempt-5.jsonl"
 
 
 def test_model_mismatch_stops_the_runner(tmp_path):
