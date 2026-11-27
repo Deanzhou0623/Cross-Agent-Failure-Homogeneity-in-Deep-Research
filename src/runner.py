@@ -224,7 +224,7 @@ class Runner:
         self.load_model = load_model
         self.make_retriever = make_retriever or self._default_retriever
         self.judge_cache = judge_cache
-        self.lock = threading.Lock()
+        self.lock = threading.Condition()
         self.inflight_room = 0.0          # sum of per-run caps of runs in flight
         self.stop_reason: str | None = None
         self._retriever = None
@@ -236,16 +236,21 @@ class Runner:
         return self._retriever
 
     def _claim(self, spec: RunSpec, mcfg: dict) -> bool:
+        """Reserve room for one run. If only in-flight runs block a cap, wait for them; else stop."""
         with self.lock:
-            if self.stop_reason:
-                return False
-            spent = spending(self.budget, self.results, self.judge_cache)
-            problem = cap_problem(spec, spent, self.budget, mcfg, self.inflight_room)
-            if problem:
-                self.stop_reason = f"stopped before {spec.run_id}: {problem} (spent {spent})"
-                return False
-            self.inflight_room += per_run_cap(spec, self.budget, mcfg)
-            return True
+            while True:
+                if self.stop_reason:
+                    return False
+                spent = spending(self.budget, self.results, self.judge_cache)
+                if not cap_problem(spec, spent, self.budget, mcfg, self.inflight_room):
+                    self.inflight_room += per_run_cap(spec, self.budget, mcfg)
+                    return True
+                problem = cap_problem(spec, spent, self.budget, mcfg, 0.0)
+                if problem:
+                    self.stop_reason = f"stopped before {spec.run_id}: {problem} (spent {spent})"
+                    self.lock.notify_all()
+                    return False
+                self.lock.wait()            # a run in flight will finish and free its room
 
     def run_one(self, spec: RunSpec) -> str:
         max_attempts = self.budget["max_attempts"]
@@ -267,6 +272,7 @@ class Runner:
             finally:
                 with self.lock:
                     self.inflight_room -= per_run_cap(spec, self.budget, mcfg)
+                    self.lock.notify_all()
             self.log(f"{spec.run_id} attempt {n}: {summary['status']} ${summary['cost_usd']:.4f}"
                      + (f" ({summary['error']['kind']})" if summary.get("error") else ""))
             if summary["status"] in DONE:

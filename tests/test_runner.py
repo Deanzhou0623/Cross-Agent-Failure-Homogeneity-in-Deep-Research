@@ -153,3 +153,12 @@ def test_confirmation_requires_the_estimate(capsys):
     assert rn._confirm(est, None) is False
     assert rn._confirm(est, 5.0) is False
     assert rn._confirm(est, 5.40) is True
+
+
+def test_runner_waits_for_in_flight_runs_instead_of_stopping(tmp_path):
+    # phase cap $0.75, per-run cap $0.40, runs cost $0.05: two workers cannot both reserve $0.40 at once,
+    # but spending stays low, so the runner must wait for in-flight runs, not stop, and finish all 4
+    b = {"caps_usd": {**ag.load_budget()["caps_usd"], "phase1": 0.75}}
+    runner = make_runner(tmp_path, [{"text": FINAL}], budget=b, cost_per_call=0.05)
+    out = runner.run_all(workers=3)
+    assert out["states"] == {"done": 4} and out["stop_reason"] is None
